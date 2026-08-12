@@ -7,6 +7,7 @@
 -- `supabase migration up`). Idempotente : ré-exécutable sans erreur.
 --
 -- Sommaire :
+--   0. Reset (idempotence totale)
 --   1. Extensions
 --   2. Enums
 --   3. Tables (organizations, profiles, memberships, groups, group_members)
@@ -16,6 +17,27 @@
 --   6. Row Level Security (RLS) + policies
 --   7. Données de test (seed) — "Église Centrale"
 -- ============================================================
+
+-- ============================================================
+-- 0. RESET
+--
+-- Ce script est le tout premier "init" du schéma, prévu pour tourner
+-- sur une base vierge OU dans un état incohérent (ex: une table
+-- partiellement créée par un essai précédent, avec des colonnes
+-- différentes). `create table if not exists` ignorerait silencieusement
+-- une telle table obsolète au lieu de la corriger — on repart donc
+-- toujours d'une table strictement vide pour ces 5 tables avant de les
+-- recréer proprement.
+--
+-- ⚠️ Ne PAS reproduire cette section dans une future migration une fois
+-- l'application en production avec de vraies données : les migrations
+-- suivantes doivent être additives (ALTER TABLE), jamais destructives.
+-- ============================================================
+drop table if exists public.group_members cascade;
+drop table if exists public.groups cascade;
+drop table if exists public.memberships cascade;
+drop table if exists public.profiles cascade;
+drop table if exists public.organizations cascade;
 
 -- ============================================================
 -- 1. EXTENSIONS
