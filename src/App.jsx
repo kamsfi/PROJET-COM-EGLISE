@@ -1,20 +1,48 @@
 import { useState } from 'react'
-import { MessageCircle, Radio, Heart, User, Church } from 'lucide-react'
+import { MessageCircle, Radio, Heart, User, Users, Layers, Calendar, Library, LogOut, UsersRound, Wallet } from 'lucide-react'
 import Discussions from './components/Discussions'
 import Canaux from './components/Canaux'
+import Evenements from './components/Evenements'
+import Mediatheque from './components/Mediatheque'
 import DirectPrieres from './components/DirectPrieres'
-import ProfilEglise from './components/ProfilEglise'
+import Annuaire from './components/Annuaire'
+import Groupes from './components/Groupes'
+import Finances from './components/Finances'
+import ProfilWorkspace from './components/ProfilWorkspace'
+import RoleBadge from './components/RoleBadge'
+import AuthModal from './components/AuthModal'
+import WorkspaceSwitcher from './components/WorkspaceSwitcher'
+import Avatar from './components/Avatar'
+import AdminAssistant from './components/AdminAssistant'
+import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext'
+import { CurrentUserProvider, useCurrentUser } from './context/CurrentUserContext'
+import { OrganizationsProvider } from './context/OrganizationsContext'
 
 const TABS = [
   { id: 'discussions', label: 'Discussions', icon: MessageCircle, component: Discussions },
   { id: 'canaux', label: 'Canaux', icon: Radio, component: Canaux },
+  { id: 'evenements', label: 'Événements', icon: Calendar, component: Evenements },
+  { id: 'mediatheque', label: 'Médiathèque', icon: Library, component: Mediatheque },
+  { id: 'annuaire', label: 'Annuaire', icon: Users, component: Annuaire },
+  { id: 'groupes', label: 'Groupes', icon: UsersRound, component: Groupes },
+  { id: 'finances', label: 'Finances', icon: Wallet, component: Finances },
   { id: 'direct', label: 'Direct & Prières', icon: Heart, component: DirectPrieres },
-  { id: 'profil', label: 'Profil & Église', icon: User, component: ProfilEglise },
+  { id: 'profil', label: 'Profil & Espace', icon: User, component: ProfilWorkspace },
 ]
 
-export default function App() {
+function AppShell() {
+  const { currentUser, isAuthenticated, logout } = useCurrentUser()
+  const { activeWorkspace } = useWorkspace()
   const [activeTab, setActiveTab] = useState('discussions')
   const ActiveComponent = TABS.find(t => t.id === activeTab).component
+
+  if (!isAuthenticated) {
+    return (
+      <div className="h-screen w-screen bg-night-900" style={{ backgroundColor: '#020617' }}>
+        <AuthModal />
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-night-900 flex" style={{ backgroundColor: '#020617' }}>
@@ -24,17 +52,22 @@ export default function App() {
         <div className="px-5 py-5 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
-              <Church className="w-5 h-5 text-white" />
+              <Layers className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-100 leading-tight">Église Connect</h1>
-              <p className="text-xs text-slate-500">Communauté de Foi</p>
+              <h1 className="font-bold text-slate-100 leading-tight">ComHub</h1>
+              <p className="text-xs text-slate-500">Plateforme Multi-Organisations</p>
             </div>
           </div>
         </div>
 
+        {/* Workspace switcher */}
+        <div className="px-3 py-3 border-b border-slate-800">
+          <WorkspaceSwitcher />
+        </div>
+
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {TABS.map(tab => {
             const Icon = tab.icon
             const active = activeTab === tab.id
@@ -57,14 +90,19 @@ export default function App() {
 
         {/* User mini-card */}
         <div className="p-3 border-t border-slate-800">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-night-700 transition-colors cursor-pointer">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-orange-600 flex items-center justify-center text-white font-semibold text-sm">
-              DL
-            </div>
+          <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-night-700 transition-colors">
+            <Avatar photoUrl={currentUser.avatarUrl} initials={currentUser.avatar} size="sm" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-200 truncate">Daniel Lefèvre</p>
-              <p className="text-xs text-slate-500 truncate">Membre actif</p>
+              <p className="text-sm font-medium text-slate-200 truncate">{currentUser.full_name}</p>
+              <RoleBadge role={activeWorkspace?.role} size="xs" />
             </div>
+            <button
+              onClick={logout}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-night-800 transition-colors shrink-0"
+              title="Se déconnecter"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>
@@ -72,15 +110,18 @@ export default function App() {
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
-        <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-night-800 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
-              <Church className="w-4 h-4 text-white" />
+        <header className="lg:hidden flex items-center justify-between gap-2 px-4 py-3 bg-night-800 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
+              <Layers className="w-4 h-4 text-white" />
             </div>
-            <h1 className="font-bold text-slate-100">Église Connect</h1>
+            <h1 className="font-bold text-slate-100 shrink-0">ComHub</h1>
           </div>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-orange-600 flex items-center justify-center text-white font-semibold text-xs">
-            DL
+          <div className="flex items-center gap-2 shrink-0">
+            <WorkspaceSwitcher variant="mobile" />
+            <button onClick={logout} title="Se déconnecter" className="relative shrink-0">
+              <Avatar photoUrl={currentUser.avatarUrl} initials={currentUser.avatar} size="xs" />
+            </button>
           </div>
         </header>
 
@@ -90,7 +131,7 @@ export default function App() {
         </div>
 
         {/* Bottom nav - Mobile */}
-        <nav className="lg:hidden flex items-center justify-around bg-night-800 border-t border-slate-800 px-2 py-1.5 pb-safe shrink-0">
+        <nav className="lg:hidden flex items-center justify-start sm:justify-around gap-0.5 bg-night-800 border-t border-slate-800 px-1.5 py-1.5 pb-safe shrink-0 overflow-x-auto">
           {TABS.map(tab => {
             const Icon = tab.icon
             const active = activeTab === tab.id
@@ -98,18 +139,32 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all ${
+                className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl transition-all shrink-0 ${
                   active ? 'text-gold' : 'text-slate-500'
                 }`}
               >
                 <Icon className={`w-5 h-5 ${active ? 'scale-110' : ''} transition-transform`} />
-                <span className="text-[10px] font-medium leading-tight">{tab.label.split(' ')[0]}</span>
+                <span className="text-[10px] font-medium leading-tight whitespace-nowrap">{tab.label.split(' ')[0]}</span>
                 {active && <span className="w-1 h-1 rounded-full bg-gold mt-0.5" />}
               </button>
             )
           })}
         </nav>
       </main>
+
+      <AdminAssistant />
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <OrganizationsProvider>
+      <CurrentUserProvider>
+        <WorkspaceProvider>
+          <AppShell />
+        </WorkspaceProvider>
+      </CurrentUserProvider>
+    </OrganizationsProvider>
   )
 }

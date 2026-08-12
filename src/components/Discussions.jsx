@@ -1,16 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Send, ArrowLeft, Users, Circle, Check, CheckCheck } from 'lucide-react'
+import { Search, Send, ArrowLeft, Circle, CheckCheck, Phone, Video } from 'lucide-react'
 import { conversations, messagesByConversation } from '../data'
+import { useWorkspace } from '../context/WorkspaceContext'
+import CallScreen from './CallScreen'
 
 export default function Discussions() {
+  const { activeWorkspace } = useWorkspace()
   const [activeId, setActiveId] = useState(null)
   const [messages, setMessages] = useState(messagesByConversation)
   const [input, setInput] = useState('')
   const [search, setSearch] = useState('')
+  const [callType, setCallType] = useState(null)
   const scrollRef = useRef(null)
 
-  const activeConv = conversations.find(c => c.id === activeId)
+  const workspaceConversations = conversations.filter(c => c.workspaceId === activeWorkspace.id)
+  const activeConv = workspaceConversations.find(c => c.id === activeId)
   const activeMessages = activeId ? (messages[activeId] || []) : []
+
+  useEffect(() => {
+    setActiveId(null)
+  }, [activeWorkspace.id])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -29,7 +38,7 @@ export default function Discussions() {
     setInput('')
   }
 
-  const filtered = conversations.filter(c =>
+  const filtered = workspaceConversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -60,11 +69,22 @@ export default function Discussions() {
             </div>
             <p className="text-xs text-slate-400 truncate">{activeConv.role}</p>
           </div>
-          {activeConv.type === 'group' && (
-            <div className="flex items-center gap-1 text-slate-400">
-              <Users className="w-5 h-5" />
-            </div>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setCallType('audio')}
+              title="Appel audio"
+              className="p-2 rounded-full hover:bg-night-700 text-slate-300 transition-colors"
+            >
+              <Phone className="w-[18px] h-[18px]" />
+            </button>
+            <button
+              onClick={() => setCallType('video')}
+              title="Appel vidéo"
+              className="p-2 rounded-full hover:bg-night-700 text-slate-300 transition-colors"
+            >
+              <Video className="w-[18px] h-[18px]" />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -75,9 +95,6 @@ export default function Discussions() {
               className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'} animate-fade-in`}
             >
               <div className={`max-w-[75%] ${msg.sender === 'me' ? 'items-end' : 'items-start'} flex flex-col`}>
-                {msg.name && (
-                  <span className="text-xs text-gold-light mb-1 px-1">{msg.name}</span>
-                )}
                 <div
                   className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     msg.sender === 'me'
@@ -116,6 +133,14 @@ export default function Discussions() {
             </button>
           </div>
         </div>
+
+        {callType && (
+          <CallScreen
+            contact={activeConv}
+            type={callType}
+            onEnd={() => setCallType(null)}
+          />
+        )}
       </div>
     )
   }
@@ -125,6 +150,7 @@ export default function Discussions() {
     <div className="flex flex-col h-full animate-fade-in">
       <div className="px-4 pt-4 pb-3 bg-night-800/50 backdrop-blur-sm">
         <h1 className="text-2xl font-bold text-slate-100 mb-3">Discussions</h1>
+        <p className="text-xs text-slate-500 -mt-2 mb-3">Messagerie privée · pour les échanges collectifs, direction l'onglet Groupes</p>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
@@ -150,11 +176,6 @@ export default function Discussions() {
               </div>
               {conv.online && (
                 <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-night-900" />
-              )}
-              {conv.type === 'group' && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-slate-700 rounded-full border-2 border-night-900 flex items-center justify-center">
-                  <Users className="w-2.5 h-2.5 text-slate-300" />
-                </span>
               )}
             </div>
             <div className="flex-1 min-w-0">

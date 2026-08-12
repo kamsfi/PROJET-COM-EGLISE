@@ -1,7 +1,17 @@
-import { useState } from 'react'
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Users, Radio, Hand, Share2, Send, Heart } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Users, Radio, Hand, Share2, Send, Heart, Sparkles, HandHeart } from 'lucide-react'
+import { prayerRequests, prayerCategories, buildPrayerEntry } from '../data'
+import { useWorkspace } from '../context/WorkspaceContext'
+import { useCurrentUser } from '../context/CurrentUserContext'
+import AIAssistantModal from './AIAssistantModal'
 
-function LiveCard({ onJoin }) {
+const LIVE_SUBJECT_BY_TYPE = {
+  church: 'Culte du Dimanche',
+  business: 'Réunion Générale',
+  ngo: 'Point de Coordination Terrain',
+}
+
+function LiveCard({ onJoin, onGenerateReport, subject }) {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-night-800 to-night-700 border border-gold/30 p-5 animate-slide-up">
       <div className="absolute -top-12 -right-12 w-40 h-40 bg-gold/10 rounded-full blur-3xl" />
@@ -12,7 +22,7 @@ function LiveCard({ onJoin }) {
             EN DIRECT BIENTÔT
           </span>
         </div>
-        <h2 className="text-xl font-bold text-slate-100 mb-1">Culte du Dimanche</h2>
+        <h2 className="text-xl font-bold text-slate-100 mb-1">{subject}</h2>
         <p className="text-sm text-slate-400 mb-4">Commence dans 1h 12min · Pasteur Jean-Marc</p>
 
         <div className="flex items-center gap-4 text-sm text-slate-300 mb-5">
@@ -33,12 +43,20 @@ function LiveCard({ onJoin }) {
           <Radio className="w-5 h-5" />
           Rejoindre le Live
         </button>
+
+        <button
+          onClick={onGenerateReport}
+          className="w-full mt-2 bg-night-700/80 hover:bg-slate-700 text-gold-light font-medium py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+        >
+          <Sparkles className="w-4 h-4" />
+          Compte-rendu IA du dernier direct
+        </button>
       </div>
     </div>
   )
 }
 
-function VideoCall({ onLeave }) {
+function VideoCall({ onLeave, onGenerateReport, subject }) {
   const [muted, setMuted] = useState(false)
   const [cameraOn, setCameraOn] = useState(true)
 
@@ -60,11 +78,21 @@ function VideoCall({ onLeave }) {
             <Radio className="w-3 h-3 animate-live-pulse" />
             EN DIRECT
           </span>
-          <span className="text-sm text-slate-400 hidden sm:inline">Culte du Dimanche · 6 participants</span>
+          <span className="text-sm text-slate-400 hidden sm:inline">{subject} · 6 participants</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Users className="w-4 h-4" />
-          <span className="hidden sm:inline">06</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onGenerateReport}
+            title="Générer le compte-rendu"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-gold/10 hover:bg-gold/20 text-gold text-xs font-medium transition-all active:scale-95"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Compte-rendu</span>
+          </button>
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Users className="w-4 h-4" />
+            <span className="hidden sm:inline">06</span>
+          </div>
         </div>
       </div>
 
@@ -136,25 +164,18 @@ function VideoCall({ onLeave }) {
   )
 }
 
-function PrayerForm() {
+function PrayerForm({ onSubmitPrayer }) {
   const [submitted, setSubmitted] = useState(false)
   const [prayer, setPrayer] = useState('')
-  const [category, setCategory] = useState('guérison')
-
-  const categories = [
-    { id: 'guérison', label: 'Guérison' },
-    { id: 'famille', label: 'Famille' },
-    { id: 'travail', label: 'Travail' },
-    { id: 'remerciement', label: 'Remerciement' },
-    { id: 'autre', label: 'Autre' },
-  ]
+  const [category, setCategory] = useState(prayerCategories[0].id)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!prayer.trim()) return
-    setSubmitted(true)
+    onSubmitPrayer(category, prayer.trim())
     setPrayer('')
-    setTimeout(() => setSubmitted(false), 4000)
+    setSubmitted(true)
+    setTimeout(() => setSubmitted(false), 2500)
   }
 
   return (
@@ -169,51 +190,125 @@ function PrayerForm() {
         </div>
       </div>
 
-      {submitted ? (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center animate-fade-in">
-          <p className="text-emerald-400 font-medium text-sm">Merci. Votre intention a été partagée avec les intercesseurs. 🙏</p>
+      {submitted && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-center mb-3 animate-fade-in">
+          <p className="text-emerald-400 font-medium text-xs">Merci. Votre intention a été ajoutée ci-dessous. 🙏</p>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex gap-2 flex-wrap">
-            {categories.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCategory(c.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  category === c.id
-                    ? 'bg-gold text-white'
-                    : 'bg-night-700 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={prayer}
-            onChange={e => setPrayer(e.target.value)}
-            placeholder="Décrivez votre intention de prière..."
-            rows={3}
-            className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none"
-          />
-          <button
-            type="submit"
-            disabled={!prayer.trim()}
-            className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
-          >
-            <Send className="w-4 h-4" />
-            Soumettre mon intention
-          </button>
-        </form>
       )}
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex gap-2 flex-wrap">
+          {prayerCategories.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCategory(c.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                category === c.id
+                  ? 'bg-gold text-white'
+                  : 'bg-night-700 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <textarea
+          value={prayer}
+          onChange={e => setPrayer(e.target.value)}
+          placeholder="Décrivez votre intention de prière..."
+          rows={3}
+          className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none"
+        />
+        <button
+          type="submit"
+          disabled={!prayer.trim()}
+          className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+        >
+          <Send className="w-4 h-4" />
+          Soumettre mon intention
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function PrayerCard({ prayer, prayed, onPray }) {
+  const categoryLabel = prayerCategories.find(c => c.id === prayer.category)?.label || prayer.category
+
+  return (
+    <div className="bg-night-800 rounded-2xl border border-slate-800 p-4 animate-slide-up">
+      <div className="flex items-center gap-3 mb-2.5">
+        <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${prayer.color} flex items-center justify-center text-white font-semibold text-xs shrink-0`}>
+          {prayer.avatar}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-slate-100 truncate">{prayer.author}</h4>
+            <span className="px-2 py-0.5 rounded-full bg-night-700 text-slate-400 text-[10px] font-medium shrink-0">
+              {categoryLabel}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">{prayer.time}</p>
+        </div>
+      </div>
+
+      <p className="text-sm text-slate-300 leading-relaxed mb-3">{prayer.content}</p>
+
+      <button
+        onClick={() => onPray(prayer.id)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
+          prayed ? 'bg-gold/20 text-gold ring-1 ring-gold/40' : 'bg-night-700 text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        <HandHeart className="w-3.5 h-3.5" />
+        {prayed ? 'Vous priez pour cela' : 'Je prie pour cela'}
+        <span className="text-slate-500">· {prayer.prayCount}</span>
+      </button>
     </div>
   )
 }
 
 export default function DirectPrieres() {
+  const { activeWorkspace } = useWorkspace()
+  const { currentUser } = useCurrentUser()
   const [inCall, setInCall] = useState(false)
+  const [showAISummary, setShowAISummary] = useState(false)
+  const [prayers, setPrayers] = useState(() => prayerRequests.filter(p => p.workspaceId === activeWorkspace.id))
+  const [prayedIds, setPrayedIds] = useState(new Set())
+
+  useEffect(() => {
+    setPrayers(prayerRequests.filter(p => p.workspaceId === activeWorkspace.id))
+    setPrayedIds(new Set())
+  }, [activeWorkspace.id])
+
+  const subject = LIVE_SUBJECT_BY_TYPE[activeWorkspace.type] || LIVE_SUBJECT_BY_TYPE.church
+
+  const handleSubmitPrayer = (category, content) => {
+    const entry = buildPrayerEntry({
+      author: currentUser.full_name,
+      avatar: currentUser.avatar,
+      color: 'from-gold to-orange-600',
+      category,
+      content,
+      workspaceId: activeWorkspace.id,
+    })
+    setPrayers(prev => [entry, ...prev])
+  }
+
+  const togglePray = (prayerId) => {
+    setPrayedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(prayerId)) {
+        next.delete(prayerId)
+        setPrayers(list => list.map(p => p.id === prayerId ? { ...p, prayCount: p.prayCount - 1 } : p))
+      } else {
+        next.add(prayerId)
+        setPrayers(list => list.map(p => p.id === prayerId ? { ...p, prayCount: p.prayCount + 1 } : p))
+      }
+      return next
+    })
+  }
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
@@ -223,15 +318,49 @@ export default function DirectPrieres() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-        <LiveCard onJoin={() => setInCall(true)} />
-        <PrayerForm />
+        <LiveCard
+          subject={subject}
+          onJoin={() => setInCall(true)}
+          onGenerateReport={() => setShowAISummary(true)}
+        />
+        <PrayerForm onSubmitPrayer={handleSubmitPrayer} />
+
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 mb-2 px-1">
+            Intentions de la communauté {prayers.length > 0 && `(${prayers.length})`}
+          </h3>
+          <div className="space-y-3">
+            {prayers.map(p => (
+              <PrayerCard key={p.id} prayer={p} prayed={prayedIds.has(p.id)} onPray={togglePray} />
+            ))}
+            {prayers.length === 0 && (
+              <div className="text-center text-slate-500 py-8 text-sm bg-night-800/50 rounded-2xl border border-slate-800">
+                Aucune intention pour le moment · soyez le premier à partager
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="text-center text-xs text-slate-600 py-2">
-          Les prières sont confidentielles · Partagées avec les intercesseurs
+          Les prières sont partagées avec la communauté · Priez les uns pour les autres
         </div>
       </div>
 
-      {inCall && <VideoCall onLeave={() => setInCall(false)} />}
+      {inCall && (
+        <VideoCall
+          subject={subject}
+          onLeave={() => setInCall(false)}
+          onGenerateReport={() => setShowAISummary(true)}
+        />
+      )}
+
+      {showAISummary && (
+        <AIAssistantModal
+          subject={subject}
+          kind="live"
+          onClose={() => setShowAISummary(false)}
+        />
+      )}
     </div>
   )
 }

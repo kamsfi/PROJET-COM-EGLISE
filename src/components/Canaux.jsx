@@ -1,6 +1,10 @@
-import { useState } from 'react'
-import { Bookmark, Calendar, MapPin, Smile, BookOpen, Megaphone } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bookmark, Calendar, MapPin, Smile, BookOpen, Megaphone, Sparkles, Plus, X, Send } from 'lucide-react'
 import { announcements } from '../data'
+import { useWorkspace } from '../context/WorkspaceContext'
+import { useCurrentUser } from '../context/CurrentUserContext'
+import { useOrganizations } from '../context/OrganizationsContext'
+import AIAssistantModal from './AIAssistantModal'
 
 const REACTION_LIST = ['🙏', '❤️', '🙌', '🔥', '✨']
 
@@ -72,7 +76,7 @@ function ReactionBar({ announcement }) {
   )
 }
 
-function AnnouncementCard({ a }) {
+function AnnouncementCard({ a, orgLabel }) {
   const typeStyles = {
     announcement: { icon: Megaphone, color: 'text-gold', bg: 'bg-gold/10', label: 'Annonce' },
     verse: { icon: BookOpen, color: 'text-sky-400', bg: 'bg-sky-500/10', label: 'Verset' },
@@ -96,7 +100,10 @@ function AnnouncementCard({ a }) {
               {style.label}
             </span>
           </div>
-          <p className="text-xs text-slate-500">{a.role} · {a.time}</p>
+          <p className="text-xs text-slate-500">
+            {a.role} · {a.time}
+            {orgLabel && <span className="text-slate-600"> · {orgLabel}</span>}
+          </p>
         </div>
         <button className="p-1.5 rounded-full hover:bg-slate-800 text-slate-500 transition-colors">
           <Bookmark className="w-4 h-4" />
@@ -136,22 +143,187 @@ function AnnouncementCard({ a }) {
   )
 }
 
+function PublishModal({ onClose, onPublish }) {
+  const [content, setContent] = useState('')
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!content.trim()) return
+    onPublish(content.trim())
+  }
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center animate-fade-in">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative w-full sm:max-w-sm bg-night-800 border border-slate-800 rounded-t-3xl sm:rounded-3xl p-6 pb-safe animate-slide-up shadow-2xl">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-700 text-slate-400 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
+            <Megaphone className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-100">Publier une annonce</h2>
+            <p className="text-xs text-slate-400">Visible par tous les membres de l'espace</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <textarea
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder="Rédigez votre annonce officielle..."
+            rows={4}
+            autoFocus
+            className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none"
+          />
+          <button
+            type="submit"
+            disabled={!content.trim()}
+            className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <Send className="w-4 h-4" />
+            Publier
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function Canaux() {
+  const { activeWorkspace } = useWorkspace()
+  const { currentUser } = useCurrentUser()
+  const { getOrgFamilyIds, getOrgById } = useOrganizations()
+  const [scope, setScope] = useState('local')
+  const [localAnnouncements, setLocalAnnouncements] = useState(() =>
+    announcements.filter(a => a.workspaceId === activeWorkspace.id)
+  )
+  const [showAISummary, setShowAISummary] = useState(false)
+  const [showPublish, setShowPublish] = useState(false)
+
+  useEffect(() => {
+    setLocalAnnouncements(announcements.filter(a => a.workspaceId === activeWorkspace.id))
+    setScope('local')
+  }, [activeWorkspace.id])
+
+  const canPublish = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
+  const familyIds = getOrgFamilyIds(activeWorkspace.id)
+  const hasFamily = familyIds.length > 1
+
+  const familyAnnouncements = hasFamily
+    ? [...localAnnouncements, ...announcements.filter(a => familyIds.includes(a.workspaceId) && a.workspaceId !== activeWorkspace.id)]
+    : localAnnouncements
+
+  const visibleAnnouncements = scope === 'denomination' ? familyAnnouncements : localAnnouncements
+
+  const handlePublish = (content) => {
+    setLocalAnnouncements(prev => [
+      {
+        id: `a-${Date.now()}`,
+        workspaceId: activeWorkspace.id,
+        author: currentUser.full_name,
+        role: currentUser.profession,
+        avatar: currentUser.avatar,
+        time: 'À l\'instant',
+        type: 'announcement',
+        content,
+        reactions: {},
+      },
+      ...prev,
+    ])
+    setShowPublish(false)
+  }
+
   return (
     <div className="flex flex-col h-full animate-fade-in">
-      <div className="px-4 pt-4 pb-3 bg-night-800/50 backdrop-blur-sm sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-slate-100">Canaux</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Annonces officielles & versets du jour</p>
+      <div className="px-4 pt-4 pb-3 bg-night-800/50 backdrop-blur-sm sticky top-0 z-10 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">Canaux</h1>
+            <p className="text-sm text-slate-400 mt-0.5">Annonces officielles de {activeWorkspace.name}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {canPublish && (
+              <button
+                onClick={() => setShowPublish(true)}
+                title="Publier une annonce"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gold hover:bg-gold-light text-white text-xs font-semibold transition-all active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Publier</span>
+              </button>
+            )}
+            {visibleAnnouncements.length > 0 && (
+              <button
+                onClick={() => setShowAISummary(true)}
+                title="Générer une synthèse du canal"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gold/10 hover:bg-gold/20 text-gold text-xs font-medium transition-all active:scale-95"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Synthèse IA</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {hasFamily && (
+          <div className="flex bg-night-700 rounded-xl p-1 w-fit">
+            <button
+              onClick={() => setScope('local')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                scope === 'local' ? 'bg-night-800 text-slate-100 shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Cet espace
+            </button>
+            <button
+              onClick={() => setScope('denomination')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                scope === 'denomination' ? 'bg-night-800 text-slate-100 shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Toute la dénomination
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-        {announcements.map(a => (
-          <AnnouncementCard key={a.id} a={a} />
+        {visibleAnnouncements.map(a => (
+          <AnnouncementCard
+            key={a.id}
+            a={a}
+            orgLabel={scope === 'denomination' && a.workspaceId !== activeWorkspace.id ? getOrgById(a.workspaceId)?.name : null}
+          />
         ))}
-        <div className="text-center text-xs text-slate-600 py-4">
-          Vous êtes à jour · 5 annonces
-        </div>
+        {visibleAnnouncements.length === 0 && (
+          <div className="text-center text-slate-500 py-12 text-sm">Aucune annonce pour cet espace</div>
+        )}
+        {visibleAnnouncements.length > 0 && (
+          <div className="text-center text-xs text-slate-600 py-4">
+            Vous êtes à jour · {visibleAnnouncements.length} annonce{visibleAnnouncements.length > 1 ? 's' : ''}
+          </div>
+        )}
       </div>
+
+      {showAISummary && (
+        <AIAssistantModal
+          subject={`Canaux — ${activeWorkspace.name}`}
+          kind="discussion"
+          onClose={() => setShowAISummary(false)}
+        />
+      )}
+
+      {showPublish && (
+        <PublishModal onClose={() => setShowPublish(false)} onPublish={handlePublish} />
+      )}
     </div>
   )
 }

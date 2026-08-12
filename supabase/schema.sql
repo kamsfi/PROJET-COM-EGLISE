@@ -1,0 +1,17 @@
+-- ============================================================
+-- ComHub — Schéma de base de données
+--
+-- Ce fichier est CONSERVÉ UNIQUEMENT comme pointeur historique.
+-- La source de vérité canonique du schéma est désormais gérée par la
+-- Supabase CLI sous forme de migration versionnée :
+--
+--   supabase/migrations/20260812_init_schema.sql
+--
+-- Pour appliquer le schéma sur votre projet Supabase :
+--   supabase link --project-ref <votre-project-ref>
+--   supabase db push
+--
+-- Ne pas dupliquer le contenu SQL ici : toute évolution du schéma doit
+-- être ajoutée comme NOUVELLE migration (ex: 20260815_add_xxx.sql) dans
+-- supabase/migrations/, jamais en modifiant une migration déjà appliquée.
+-- ============================================================
