@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, MapPin, Clock, Users, Check, Plus } from 'lucide-react'
-import { events as eventsData, eventCategoriesByType } from '../data'
+import { events as eventsData, eventCategoriesByType, isUuid } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useCurrentUser } from '../context/CurrentUserContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import CreateEventModal from './CreateEventModal'
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -139,6 +141,7 @@ function EventCard({ event, categories, onToggleRegister, registered }) {
 
 export default function Evenements() {
   const { activeWorkspace } = useWorkspace()
+  const { currentUser } = useCurrentUser()
   const categories = eventCategoriesByType[activeWorkspace.type] || []
 
   const [current, setCurrent] = useState(new Date())
@@ -147,6 +150,13 @@ export default function Evenements() {
   const [registrations, setRegistrations] = useState({})
   const [showCreate, setShowCreate] = useState(false)
   const [localEvents, setLocalEvents] = useState(() => eventsData.filter(e => e.workspaceId === activeWorkspace.id))
+  // Jamais réinitialisé au changement d'espace — même cycle de vie que
+  // dynamicAnnouncements dans Canaux.jsx.
+  const [realEvents, setRealEvents] = useState([])
+  const [realRegisteredIds, setRealRegisteredIds] = useState(new Set())
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const isRealWorkspace = isUuid(activeWorkspace.id)
 
   useEffect(() => {
     setSelected(null)
@@ -154,15 +164,111 @@ export default function Evenements() {
     setLocalEvents(eventsData.filter(e => e.workspaceId === activeWorkspace.id))
   }, [activeWorkspace.id])
 
+  // Charge les vrais événements Supabase de l'espace actif (+ inscriptions
+  // pour compter les participants et savoir si l'utilisateur courant y figure).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isUuid(activeWorkspace.id)) return
+    let cancelled = false
+
+    async function loadEvents() {
+      const { data: rows, error } = await supabase
+        .from('events')
+        .select('id, title, category, event_date, event_time, location, capacity, description, event_registrations(user_id)')
+        .eq('organization_id', activeWorkspace.id)
+        .order('event_date', { ascending: true })
+      if (cancelled) return
+      if (error) { console.warn('[ComHub] Échec du chargement des événements Supabase', error); return }
+
+      const mapped = (rows || []).map(row => ({
+        id: row.id,
+        workspaceId: activeWorkspace.id,
+        title: row.title,
+        category: row.category,
+        date: row.event_date,
+        time: row.event_time || '',
+        location: row.location || '',
+        attendees: (row.event_registrations || []).length,
+        capacity: row.capacity,
+        description: row.description || '',
+      }))
+
+      const myIds = (rows || [])
+        .filter(row => (row.event_registrations || []).some(r => r.user_id === currentUser.id))
+        .map(row => row.id)
+
+      setRealEvents(prev => {
+        const byId = new Map(prev.map(e => [e.id, e]))
+        for (const e of mapped) byId.set(e.id, e)
+        return Array.from(byId.values())
+      })
+      setRealRegisteredIds(prev => new Set([...prev, ...myIds]))
+    }
+
+    loadEvents()
+    return () => { cancelled = true }
+  }, [activeWorkspace.id, currentUser.id])
+
   const canManage = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
 
-  const eventDates = useMemo(() => new Set(localEvents.map(e => e.date)), [localEvents])
+  const events = isRealWorkspace
+    ? realEvents.filter(e => e.workspaceId === activeWorkspace.id)
+    : localEvents
 
-  const toggleRegister = (id) => {
+  const eventDates = useMemo(() => new Set(events.map(e => e.date)), [events])
+
+  const toggleRegister = async (id) => {
+    if (isRealWorkspace) {
+      const already = realRegisteredIds.has(id)
+      setRealRegisteredIds(prev => {
+        const next = new Set(prev)
+        already ? next.delete(id) : next.add(id)
+        return next
+      })
+      setRealEvents(prev => prev.map(e => e.id === id ? { ...e, attendees: e.attendees + (already ? -1 : 1) } : e))
+
+      const { error } = already
+        ? await supabase.from('event_registrations').delete().match({ event_id: id, user_id: currentUser.id })
+        : await supabase.from('event_registrations').insert({ event_id: id, user_id: currentUser.id })
+
+      if (error && error.code !== '23505') {
+        console.warn('[ComHub] Échec de la mise à jour de l\'inscription Supabase', error)
+        setRealRegisteredIds(prev => {
+          const next = new Set(prev)
+          already ? next.add(id) : next.delete(id)
+          return next
+        })
+        setRealEvents(prev => prev.map(e => e.id === id ? { ...e, attendees: e.attendees + (already ? 1 : -1) } : e))
+      }
+      return
+    }
+    // Branche mock (inchangée)
     setRegistrations(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  const handleCreate = (data) => {
+  const handleCreate = async (data) => {
+    if (isSupabaseConfigured && isUuid(activeWorkspace.id)) {
+      setCreateError('')
+      setCreating(true)
+      const { data: row, error } = await supabase.from('events')
+        .insert({
+          organization_id: activeWorkspace.id, created_by: currentUser.id,
+          title: data.title, category: data.category, event_date: data.date,
+          event_time: data.time, location: data.location, capacity: data.capacity,
+          description: data.description,
+        })
+        .select('id')
+        .single()
+      setCreating(false)
+      if (error) {
+        console.warn('[ComHub] Échec de la création de l\'événement Supabase', error)
+        setCreateError('Impossible de créer l\'événement. Réessayez.')
+        return
+      }
+      setRealEvents(prev => [{ id: row.id, workspaceId: activeWorkspace.id, attendees: 0, ...data }, ...prev])
+      setShowCreate(false)
+      return
+    }
+    // Branche mock (inchangée)
     setLocalEvents(prev => [
       { id: `e-${Date.now()}`, workspaceId: activeWorkspace.id, attendees: 0, ...data },
       ...prev,
@@ -171,11 +277,11 @@ export default function Evenements() {
   }
 
   const filtered = useMemo(() => {
-    return localEvents
+    return events
       .filter(e => (selected ? e.date === selected : true))
       .filter(e => (activeCategory === 'all' ? true : e.category === activeCategory))
       .sort((a, b) => a.date.localeCompare(b.date))
-  }, [localEvents, selected, activeCategory])
+  }, [events, selected, activeCategory])
 
   return (
     <div className="flex flex-col h-full animate-fade-in">

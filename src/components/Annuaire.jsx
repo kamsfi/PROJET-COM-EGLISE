@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { Search, Phone, Briefcase, X } from 'lucide-react'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useOrganizations } from '../context/OrganizationsContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { getInitials, pickColor } from '../data'
 import RoleBadge from './RoleBadge'
 import Avatar from './Avatar'
 import MemberProfileModal from './MemberProfileModal'
@@ -46,7 +48,7 @@ function MemberCard({ member, orgLabel, onOpen }) {
 
 export default function Annuaire() {
   const { activeWorkspace } = useWorkspace()
-  const { members, getOrgFamilyIds, getOrgById } = useOrganizations()
+  const { members, getOrgFamilyIds, getOrgById, mergeRemoteMembers } = useOrganizations()
   const [search, setSearch] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [scope, setScope] = useState('local')
@@ -63,6 +65,40 @@ export default function Annuaire() {
 
   const familyIds = getOrgFamilyIds(activeWorkspace.id)
   const hasFamily = familyIds.length > 1
+
+  // Charge les vrais membres Supabase de l'espace (ou de la dénomination
+  // entière) et les fusionne dans le même catalogue que les membres mock.
+  // No-op silencieux si Supabase n'est pas configuré.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let cancelled = false
+
+    async function loadMembers() {
+      const { data: rows, error } = await supabase
+        .from('memberships')
+        .select('role, organization_id, profiles(id, full_name, avatar_url, profession, skills)')
+        .in('organization_id', familyIds)
+      if (cancelled) return
+      if (error) { console.warn('[ComHub] Échec du chargement des membres Supabase', error); return }
+      const mapped = (rows || [])
+        .filter(r => r.profiles)
+        .map(r => ({
+          id: r.profiles.id,
+          workspaceId: r.organization_id,
+          full_name: r.profiles.full_name,
+          avatar: getInitials(r.profiles.full_name),
+          color: pickColor(r.profiles.id),
+          role: r.role,
+          profession: r.profiles.profession || '',
+          skills: r.profiles.skills || [],
+          photoUrl: r.profiles.avatar_url || undefined,
+        }))
+      mergeRemoteMembers(mapped)
+    }
+
+    loadMembers()
+    return () => { cancelled = true }
+  }, [familyIds.join(','), mergeRemoteMembers])
 
   const workspaceMembers = useMemo(() => {
     const ids = scope === 'denomination' ? familyIds : [activeWorkspace.id]

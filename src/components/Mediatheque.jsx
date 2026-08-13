@@ -1,7 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Search, Play, Pause, Video, Mic2, X, TrendingUp } from 'lucide-react'
-import { mediaItems, mediaCategories, mediaSubtitleByType } from '../data'
+import { mediaItems, mediaCategories, mediaSubtitleByType, isUuid, pickColor } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+
+function formatMediaDate(isoString) {
+  return new Date(isoString).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
 
 function MediaCard({ item, onPlay, isPlaying }) {
   const TypeIcon = item.type === 'video' ? Video : Mic2
@@ -72,21 +77,64 @@ export default function Mediatheque() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [nowPlaying, setNowPlaying] = useState(null)
   const [playing, setPlaying] = useState(false)
+  // Jamais réinitialisé au changement d'espace, upsert par id.
+  const [realMediaItems, setRealMediaItems] = useState([])
+  const isRealWorkspace = isUuid(activeWorkspace.id)
 
   useEffect(() => {
     setNowPlaying(null)
     setPlaying(false)
   }, [activeWorkspace.id])
 
+  // Charge le vrai catalogue Supabase de l'espace actif.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isUuid(activeWorkspace.id)) return
+    let cancelled = false
+
+    async function loadMedia() {
+      const { data: rows, error } = await supabase
+        .from('media_items')
+        .select('id, title, speaker, type, series, duration, plays, created_at')
+        .eq('organization_id', activeWorkspace.id)
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (error) { console.warn('[ComHub] Échec du chargement de la médiathèque Supabase', error); return }
+
+      const mapped = (rows || []).map(row => ({
+        id: row.id,
+        workspaceId: activeWorkspace.id,
+        title: row.title,
+        speaker: row.speaker || '',
+        type: row.type,
+        series: row.series || '',
+        duration: row.duration || '',
+        date: formatMediaDate(row.created_at),
+        plays: row.plays ?? 0,
+        color: pickColor(row.id),
+      }))
+
+      setRealMediaItems(prev => {
+        const byId = new Map(prev.map(m => [m.id, m]))
+        for (const m of mapped) byId.set(m.id, m)
+        return Array.from(byId.values())
+      })
+    }
+
+    loadMedia()
+    return () => { cancelled = true }
+  }, [activeWorkspace.id])
+
   const filtered = useMemo(() => {
-    return mediaItems
-      .filter(m => m.workspaceId === activeWorkspace.id)
+    const source = isRealWorkspace
+      ? realMediaItems.filter(m => m.workspaceId === activeWorkspace.id)
+      : mediaItems.filter(m => m.workspaceId === activeWorkspace.id)
+    return source
       .filter(m => (activeCategory === 'all' ? true : m.type === activeCategory))
       .filter(m =>
         m.title.toLowerCase().includes(search.toLowerCase()) ||
         m.speaker.toLowerCase().includes(search.toLowerCase())
       )
-  }, [activeWorkspace.id, search, activeCategory])
+  }, [isRealWorkspace, realMediaItems, activeWorkspace.id, search, activeCategory])
 
   const handlePlay = (item) => {
     if (nowPlaying?.id === item.id) {

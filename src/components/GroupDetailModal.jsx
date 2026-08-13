@@ -8,7 +8,7 @@ import CallScreen from './CallScreen'
 import Avatar from './Avatar'
 import MemberProfileModal from './MemberProfileModal'
 
-export default function GroupDetailModal({ group, color, members, joined, onToggleJoin, onClose }) {
+export default function GroupDetailModal({ group, color, members, joined, onToggleJoin, joinError = '', onClose }) {
   const { currentUser, updateCurrentUser } = useCurrentUser()
   const [tab, setTab] = useState('chat')
   const [messages, setMessages] = useState(() => messagesByGroup[group.id] || [])
@@ -166,12 +166,15 @@ export default function GroupDetailModal({ group, color, members, joined, onTogg
                 </button>
               </div>
             ) : (
-              <button
-                onClick={onToggleJoin}
-                className="w-full bg-gold hover:bg-gold-light text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
-              >
-                Rejoindre le groupe pour participer à la discussion
-              </button>
+              <>
+                {joinError && <p className="text-xs text-red-400 text-center mb-2">{joinError}</p>}
+                <button
+                  onClick={onToggleJoin}
+                  className="w-full bg-gold hover:bg-gold-light text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
+                >
+                  Rejoindre le groupe pour participer à la discussion
+                </button>
+              </>
             )}
           </div>
         </>
@@ -227,7 +230,7 @@ export default function GroupDetailModal({ group, color, members, joined, onTogg
 
           <div>
             <p className="text-xs font-medium text-slate-400 mb-2">
-              Membres{members.length > 0 ? ` (aperçu · ${members.length})` : ''}
+              Membres{members.length > 0 ? ` (${members.length}${members.length < group.memberCount ? ' aperçu' : ''})` : ''}
             </p>
 
             {members.length > 0 ? (
@@ -246,15 +249,18 @@ export default function GroupDetailModal({ group, color, members, joined, onTogg
                     <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   </button>
                 ))}
-                <p className="text-[11px] text-slate-600 text-center pt-1">
-                  Aperçu · liste complète non disponible en mode démo
-                </p>
+                {members.length < group.memberCount && (
+                  <p className="text-[11px] text-slate-600 text-center pt-1">
+                    Aperçu · liste complète non disponible en mode démo
+                  </p>
+                )}
               </div>
             ) : (
               <p className="text-sm text-slate-500">Aucun membre à afficher pour ce groupe pour le moment.</p>
             )}
           </div>
 
+          {joinError && <p className="text-xs text-red-400 text-center">{joinError}</p>}
           <button
             onClick={onToggleJoin}
             className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] ${

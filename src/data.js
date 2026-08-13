@@ -1,4 +1,39 @@
 // ============================================================
+// UTILITAIRES PARTAGÉS (auth / profils — mock ET session Supabase réelle)
+// ============================================================
+export function getInitials(name) {
+  const parts = name.trim().split(/\s+/).slice(0, 2)
+  return parts.map(w => w[0]?.toUpperCase() || '').join('') || '??'
+}
+
+// Nommage anglais/camelCase côté front (church/business/ngo) vs français
+// côté Supabase (organization_type: eglise/entreprise/ong).
+export const ORG_TYPE_FROM_DB = { eglise: 'church', entreprise: 'business', ong: 'ngo' }
+
+// Distingue un id d'organisation réel (uuid Supabase) d'un id mock
+// ('w1', 'w1b'...) — utilisé par tout composant qui ne doit interroger
+// Supabase que pour un espace réel (ex: "Accès Démo Rapide" peut coexister
+// avec isSupabaseConfigured===true en prod).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export function isUuid(id) {
+  return UUID_RE.test(id)
+}
+export function isRealWorkspaceId(id) {
+  return isUuid(id)
+}
+
+const AVATAR_COLORS = [
+  'from-amber-500 to-orange-600', 'from-blue-500 to-indigo-600', 'from-emerald-500 to-teal-600',
+  'from-rose-500 to-pink-600', 'from-violet-500 to-purple-600', 'from-cyan-500 to-blue-600',
+]
+
+export function pickColor(seed) {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+// ============================================================
 // WORKSPACES (multi-tenant / organizations)
 // ============================================================
 export const workspaceTypeLabels = {

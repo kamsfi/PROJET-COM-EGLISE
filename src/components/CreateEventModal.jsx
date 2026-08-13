@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, CalendarPlus, MapPin, Users } from 'lucide-react'
 
-export default function CreateEventModal({ categories, onClose, onCreate }) {
+export default function CreateEventModal({ categories, onClose, onCreate, submitting = false, error = '' }) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState(categories[0]?.id || '')
   const [date, setDate] = useState('')
@@ -12,7 +12,7 @@ export default function CreateEventModal({ categories, onClose, onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!title.trim() || !date || !time || !location.trim()) return
+    if (!title.trim() || !date || !time || !location.trim() || submitting) return
     onCreate({
       title: title.trim(),
       category,
@@ -124,12 +124,14 @@ export default function CreateEventModal({ categories, onClose, onCreate }) {
             className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none"
           />
 
+          {error && <p className="text-xs text-red-400 px-1">{error}</p>}
+
           <button
             type="submit"
-            disabled={!title.trim() || !date || !time || !location.trim()}
+            disabled={!title.trim() || !date || !time || !location.trim() || submitting}
             className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
           >
-            Créer l'événement
+            {submitting ? 'Création…' : "Créer l'événement"}
           </button>
         </form>
       </div>

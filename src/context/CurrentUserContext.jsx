@@ -1,41 +1,117 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { demoUsers as seedUsers } from '../data'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { demoUsers as seedUsers, getInitials } from '../data'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { useOrganizations } from './OrganizationsContext'
 
 const CurrentUserContext = createContext(null)
 
+// Charge le profil applicatif (`public.profiles`) et les adhésions réelles
+// (`public.memberships` -> `public.organizations`) d'une session Supabase
+// authentifiée. Le trigger `on_auth_user_created` garantit qu'une ligne
+// `profiles` existe déjà dès qu'une session existe.
+async function loadRemoteProfile(session) {
+  const userId = session.user.id
+  const [{ data: profileRow, error: profileErr }, { data: membershipRows, error: membershipErr }] =
+    await Promise.all([
+      supabase.from('profiles')
+        .select('id, full_name, avatar_url, gender, date_of_birth, profession, skills')
+        .eq('id', userId).single(),
+      supabase.from('memberships')
+        .select('role, organization_id, organizations(id, name, type, code_invitation, parent_id)')
+        .eq('user_id', userId),
+    ])
+  if (profileErr || membershipErr) {
+    console.warn('[ComHub] Échec du chargement du profil Supabase', profileErr || membershipErr)
+    return null
+  }
+  return { profileRow, membershipRows }
+}
+
+// Reconstruit un objet `currentUser` compatible avec le format des
+// utilisateurs mock (`data.js`) à partir d'une session + profil réels.
+function mapProfileToUser(session, profileRow, membershipRows) {
+  return {
+    id: session.user.id,
+    full_name: profileRow.full_name,
+    email: session.user.email,
+    phone: session.user.phone || '',
+    gender: profileRow.gender === 'homme' ? 'M' : profileRow.gender === 'femme' ? 'F' : null,
+    birth_date: profileRow.date_of_birth,
+    marital_status: null,
+    profession: profileRow.profession || '',
+    skills: profileRow.skills || [],
+    avatar: getInitials(profileRow.full_name),
+    avatarUrl: profileRow.avatar_url || null,
+    memberSince: `Membre depuis ${new Date(session.user.created_at ?? Date.now()).getFullYear()}`,
+    stats: { events: 0, prayers: 0, donations: 0 },
+    memberships: (membershipRows || []).map(m => ({ workspaceId: m.organization_id, role: m.role })),
+  }
+}
+
 export function CurrentUserProvider({ children }) {
+  const { mergeRemoteOrganizations } = useOrganizations()
+
   // `users` inclut les profils de démo de départ + tout compte créé via
-  // le formulaire d'inscription pendant la session (state local, prêt à
-  // être remplacé par de vrais appels Supabase Auth).
+  // le formulaire d'inscription pendant la session (state local mock).
   const [users, setUsers] = useState(seedUsers)
   const [currentUserId, setCurrentUserId] = useState(seedUsers[0].id)
-  // L'app démarre non connectée : l'écran d'authentification est le point
-  // d'entrée (connexion, accès démo rapide, ou inscription).
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  // Authentification "démo" (Accès Démo Rapide / mode Supabase non configuré).
+  const [mockAuthenticated, setMockAuthenticated] = useState(false)
 
-  const currentUser = useMemo(
-    () => users.find(u => u.id === currentUserId) || users[0],
-    [users, currentUserId]
-  )
+  // Session Supabase réelle : profil chargé depuis `public.profiles` +
+  // `public.memberships`, tenu à jour via `onAuthStateChange`.
+  const [sessionProfile, setSessionProfile] = useState(null)
+  const [sessionLoading, setSessionLoading] = useState(isSupabaseConfigured)
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let cancelled = false
+
+    async function applySession(session) {
+      if (!session) {
+        if (!cancelled) { setSessionProfile(null); setSessionLoading(false) }
+        return
+      }
+      const loaded = await loadRemoteProfile(session)
+      if (cancelled) return
+      if (!loaded) { setSessionLoading(false); return }
+      mergeRemoteOrganizations(loaded.membershipRows.map(m => m.organizations).filter(Boolean))
+      setSessionProfile(mapProfileToUser(session, loaded.profileRow, loaded.membershipRows))
+      setSessionLoading(false)
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session)
+    })
+
+    return () => { cancelled = true; subscription.unsubscribe() }
+  }, [mergeRemoteOrganizations])
+
+  const currentUser = useMemo(() => {
+    const base = sessionProfile ?? users.find(u => u.id === currentUserId) ?? users[0]
+    return { ...base, memberships: base.memberships ?? [] }
+  }, [sessionProfile, users, currentUserId])
+
+  const isAuthenticated = Boolean(sessionProfile) || mockAuthenticated
 
   const login = useCallback((userId) => {
     setCurrentUserId(userId)
-    setIsAuthenticated(true)
+    setMockAuthenticated(true)
   }, [])
 
-  const logout = useCallback(() => {
-    setIsAuthenticated(false)
+  const logout = useCallback(async () => {
+    if (isSupabaseConfigured && supabase) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) await supabase.auth.signOut()
+    }
+    setMockAuthenticated(false)
   }, [])
 
-  // Connexion par numéro de téléphone (identifiant principal) ou par
-  // e-mail (réservé en pratique aux comptes administrateurs).
+  // Connexion démo par e-mail (identifiant principal).
   const findUserByIdentifier = useCallback((identifier) => {
     const value = identifier.trim().toLowerCase()
     if (!value) return null
-    return users.find(u =>
-      (u.phone && u.phone.replace(/\s+/g, '') === value.replace(/\s+/g, '')) ||
-      (u.email && u.email.toLowerCase() === value)
-    )
+    return users.find(u => u.email && u.email.toLowerCase() === value)
   }, [users])
 
   // Enregistre un nouveau compte (issu du formulaire d'inscription) sans
@@ -45,11 +121,16 @@ export function CurrentUserProvider({ children }) {
     return userData
   }, [])
 
-  // Met à jour le profil de l'utilisateur courant (photo, devise, etc.) —
-  // state local, prêt à être relié à une mutation Supabase `profiles`.
+  // Met à jour l'utilisateur courant (photo, devise, etc.). Pour une
+  // session réelle, la mise à jour reste locale (non persistée en base
+  // pour l'instant — Storage/Phase suivante).
   const updateCurrentUser = useCallback((patch) => {
+    if (sessionProfile) {
+      setSessionProfile(prev => ({ ...prev, ...patch }))
+      return
+    }
     setUsers(prev => prev.map(u => u.id === currentUserId ? { ...u, ...patch } : u))
-  }, [currentUserId])
+  }, [sessionProfile, currentUserId])
 
   const value = {
     demoUsers: users,
@@ -57,6 +138,7 @@ export function CurrentUserProvider({ children }) {
     setCurrentUserId,
     currentUser,
     isAuthenticated,
+    sessionLoading,
     login,
     logout,
     findUserByIdentifier,

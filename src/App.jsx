@@ -31,10 +31,18 @@ const TABS = [
 ]
 
 function AppShell() {
-  const { currentUser, isAuthenticated, logout } = useCurrentUser()
+  const { currentUser, isAuthenticated, sessionLoading, logout } = useCurrentUser()
   const { activeWorkspace } = useWorkspace()
   const [activeTab, setActiveTab] = useState('discussions')
   const ActiveComponent = TABS.find(t => t.id === activeTab).component
+
+  if (sessionLoading) {
+    return (
+      <div className="h-screen w-screen bg-night-900 flex items-center justify-center" style={{ backgroundColor: '#020617' }}>
+        <Layers className="w-8 h-8 text-gold animate-pulse" />
+      </div>
+    )
+  }
 
   if (!isAuthenticated) {
     return (

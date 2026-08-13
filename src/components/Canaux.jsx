@@ -1,12 +1,23 @@
 import { useEffect, useState } from 'react'
 import { Bookmark, Calendar, MapPin, Smile, BookOpen, Megaphone, Sparkles, Plus, X, Send } from 'lucide-react'
-import { announcements } from '../data'
+import { announcements, getInitials, isRealWorkspaceId } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { useOrganizations } from '../context/OrganizationsContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import AIAssistantModal from './AIAssistantModal'
 
 const REACTION_LIST = ['🙏', '❤️', '🙌', '🔥', '✨']
+
+// Heure pour un post du jour, date courte sinon.
+function formatAnnouncementTime(isoString) {
+  const date = new Date(isoString)
+  const now = new Date()
+  const sameDay = date.toDateString() === now.toDateString()
+  return sameDay
+    ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+}
 
 function ReactionBar({ announcement }) {
   const [reactions, setReactions] = useState(announcement.reactions)
@@ -143,12 +154,12 @@ function AnnouncementCard({ a, orgLabel }) {
   )
 }
 
-function PublishModal({ onClose, onPublish }) {
+function PublishModal({ onClose, onPublish, submitting = false, error = '' }) {
   const [content, setContent] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!content.trim()) return
+    if (!content.trim() || submitting) return
     onPublish(content.trim())
   }
 
@@ -183,13 +194,15 @@ function PublishModal({ onClose, onPublish }) {
             autoFocus
             className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none"
           />
+          {error && <p className="text-xs text-red-400 px-1">{error}</p>}
+
           <button
             type="submit"
-            disabled={!content.trim()}
+            disabled={!content.trim() || submitting}
             className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <Send className="w-4 h-4" />
-            Publier
+            {submitting ? 'Publication…' : 'Publier'}
           </button>
         </form>
       </div>
@@ -202,29 +215,102 @@ export default function Canaux() {
   const { currentUser } = useCurrentUser()
   const { getOrgFamilyIds, getOrgById } = useOrganizations()
   const [scope, setScope] = useState('local')
-  const [localAnnouncements, setLocalAnnouncements] = useState(() =>
-    announcements.filter(a => a.workspaceId === activeWorkspace.id)
-  )
+  // Jamais réinitialisé au changement d'espace — même cycle de vie que
+  // dynamicOrgs/dynamicMembers dans OrganizationsContext.
+  const [dynamicAnnouncements, setDynamicAnnouncements] = useState([])
   const [showAISummary, setShowAISummary] = useState(false)
   const [showPublish, setShowPublish] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState('')
 
   useEffect(() => {
-    setLocalAnnouncements(announcements.filter(a => a.workspaceId === activeWorkspace.id))
     setScope('local')
   }, [activeWorkspace.id])
 
-  const canPublish = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
   const familyIds = getOrgFamilyIds(activeWorkspace.id)
   const hasFamily = familyIds.length > 1
 
+  // Charge les vraies annonces Supabase de toute la famille (siège +
+  // annexes) en un seul aller-retour, fusionnées par upsert-sur-id.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isRealWorkspaceId(activeWorkspace.id)) return
+    let cancelled = false
+
+    async function loadAnnouncements() {
+      const { data: rows, error } = await supabase
+        .from('announcements')
+        .select('id, organization_id, content, created_at, profiles(full_name, profession)')
+        .in('organization_id', familyIds)
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (error) { console.warn('[ComHub] Échec du chargement des annonces Supabase', error); return }
+
+      const mapped = (rows || []).map(row => ({
+        id: row.id,
+        workspaceId: row.organization_id,
+        author: row.profiles?.full_name || 'Utilisateur supprimé',
+        role: row.profiles?.profession || '',
+        avatar: row.profiles?.full_name ? getInitials(row.profiles.full_name) : '??',
+        time: formatAnnouncementTime(row.created_at),
+        type: 'announcement',
+        content: row.content,
+        reactions: {},
+      }))
+
+      setDynamicAnnouncements(prev => {
+        const byId = new Map(prev.map(a => [a.id, a]))
+        for (const a of mapped) byId.set(a.id, a)
+        return Array.from(byId.values())
+      })
+    }
+
+    loadAnnouncements()
+    return () => { cancelled = true }
+  }, [familyIds.join(',')])
+
+  const canPublish = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
+
+  const allAnnouncements = [...dynamicAnnouncements, ...announcements]
+  const localAnnouncements = allAnnouncements.filter(a => a.workspaceId === activeWorkspace.id)
   const familyAnnouncements = hasFamily
-    ? [...localAnnouncements, ...announcements.filter(a => familyIds.includes(a.workspaceId) && a.workspaceId !== activeWorkspace.id)]
+    ? allAnnouncements.filter(a => familyIds.includes(a.workspaceId))
     : localAnnouncements
 
   const visibleAnnouncements = scope === 'denomination' ? familyAnnouncements : localAnnouncements
 
-  const handlePublish = (content) => {
-    setLocalAnnouncements(prev => [
+  const handlePublish = async (content) => {
+    if (isSupabaseConfigured && isRealWorkspaceId(activeWorkspace.id)) {
+      setPublishError('')
+      setPublishing(true)
+      const { data, error } = await supabase.from('announcements')
+        .insert({ organization_id: activeWorkspace.id, author_id: currentUser.id, content })
+        .select('id, created_at')
+        .single()
+      setPublishing(false)
+      if (error) {
+        console.warn('[ComHub] Échec de la publication de l\'annonce Supabase', error)
+        setPublishError('Impossible de publier l\'annonce. Réessayez.')
+        return
+      }
+      setDynamicAnnouncements(prev => [
+        {
+          id: data.id,
+          workspaceId: activeWorkspace.id,
+          author: currentUser.full_name,
+          role: currentUser.profession,
+          avatar: currentUser.avatar,
+          time: 'À l\'instant',
+          type: 'announcement',
+          content,
+          reactions: {},
+        },
+        ...prev,
+      ])
+      setShowPublish(false)
+      return
+    }
+    // Branche mock (inchangée dans son résultat, juste sur `dynamicAnnouncements` désormais)
+    setDynamicAnnouncements(prev => [
       {
         id: `a-${Date.now()}`,
         workspaceId: activeWorkspace.id,
@@ -322,7 +408,12 @@ export default function Canaux() {
       )}
 
       {showPublish && (
-        <PublishModal onClose={() => setShowPublish(false)} onPublish={handlePublish} />
+        <PublishModal
+          onClose={() => { setShowPublish(false); setPublishError('') }}
+          onPublish={handlePublish}
+          submitting={publishing}
+          error={publishError}
+        />
       )}
     </div>
   )

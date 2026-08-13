@@ -1,11 +1,55 @@
 import { useEffect, useState } from 'react'
 import { UsersRound, Sparkles, Plus } from 'lucide-react'
-import { groups as groupsData } from '../data'
+import { groups as groupsData, getInitials, pickColor, isRealWorkspaceId } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useOrganizations } from '../context/OrganizationsContext'
+import { useCurrentUser } from '../context/CurrentUserContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { ruleBadges } from './ruleBadges'
 import GroupRulesModal from './GroupRulesModal'
 import GroupDetailModal from './GroupDetailModal'
+
+// Traduit `targeting_type`/`targeting_criteria` (SQL) vers la forme `rules`
+// attendue par `ruleBadges`/`GroupRulesModal` (gender 'M'/'F', etc.).
+function mapCriteriaToRules(targetingType, criteria) {
+  const c = criteria || {}
+  if (targetingType === 'gender' && c.gender) {
+    return { gender: c.gender === 'homme' ? 'M' : c.gender === 'femme' ? 'F' : null, min_age: null, max_age: null, marital_status: null }
+  }
+  if (targetingType === 'age') {
+    return { gender: null, min_age: c.min_age ?? null, max_age: c.max_age ?? null, marital_status: null }
+  }
+  if (targetingType === 'custom') {
+    const hasKnownField = c.gender != null || c.min_age != null || c.max_age != null || c.marital_status != null
+    return hasKnownField ? { gender: c.gender ?? null, min_age: c.min_age ?? null, max_age: c.max_age ?? null, marital_status: c.marital_status ?? null } : null
+  }
+  return null // 'skills' — pas de représentation UI aujourd'hui, dégrade en "groupe ouvert"
+}
+
+// Traduit `rules` (frontend) vers `targeting_type`/`targeting_criteria` (SQL).
+// Le trigger d'auto-affectation ne sait gérer qu'un seul critère à la fois
+// (genre OU âge) et ignore le statut marital — un seul critère renseigné
+// bascule au format natif (auto-affectation serveur réelle), sinon
+// `targeting_type: 'custom'` (jamais interprété côté serveur, affichage
+// uniquement, adhésion manuelle).
+function deriveTargeting(rules) {
+  if (!rules) return { targeting_type: 'custom', targeting_criteria: {} }
+  const hasGender = rules.gender != null
+  const hasAge = rules.min_age != null || rules.max_age != null
+  const hasMarital = rules.marital_status != null
+  const activeCount = [hasGender, hasAge, hasMarital].filter(Boolean).length
+
+  if (activeCount === 1 && hasGender) {
+    return { targeting_type: 'gender', targeting_criteria: { gender: rules.gender === 'M' ? 'homme' : 'femme' } }
+  }
+  if (activeCount === 1 && hasAge) {
+    const criteria = {}
+    if (rules.min_age != null) criteria.min_age = rules.min_age
+    if (rules.max_age != null) criteria.max_age = rules.max_age
+    return { targeting_type: 'age', targeting_criteria: criteria }
+  }
+  return { targeting_type: 'custom', targeting_criteria: rules }
+}
 
 const CARD_COLORS = [
   'from-gold to-gold-dark',
@@ -62,20 +106,110 @@ function GroupCard({ group, color, onOpen }) {
 
 export default function Groupes() {
   const { activeWorkspace } = useWorkspace()
-  const { members } = useOrganizations()
+  const { members, mergeRemoteMembers } = useOrganizations()
+  const { currentUser } = useCurrentUser()
   const [localGroups, setLocalGroups] = useState(() => groupsData.filter(g => g.workspaceId === activeWorkspace.id))
   const [showModal, setShowModal] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState(null)
   const [joinedGroupIds, setJoinedGroupIds] = useState(new Set())
+  const [createError, setCreateError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [joinError, setJoinError] = useState('')
 
   useEffect(() => {
     setLocalGroups(groupsData.filter(g => g.workspaceId === activeWorkspace.id))
     setSelectedGroupId(null)
   }, [activeWorkspace.id])
 
+  // Charge les vrais groupes Supabase (+ leurs membres réels) de l'espace
+  // actif et les fusionne au catalogue local. No-op pour un espace mock ou
+  // si Supabase n'est pas configuré (ex: Accès Démo Rapide en prod).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isRealWorkspaceId(activeWorkspace.id)) return
+    let cancelled = false
+
+    async function loadGroups() {
+      const [{ data: groupRows, error: groupsErr }, { data: memberRows, error: membersErr }] = await Promise.all([
+        supabase.from('groups')
+          .select('id, name, description, targeting_type, targeting_criteria, group_members(user_id, profiles(id, full_name, avatar_url, profession, skills))')
+          .eq('organization_id', activeWorkspace.id),
+        supabase.from('memberships')
+          .select('user_id, role')
+          .eq('organization_id', activeWorkspace.id),
+      ])
+      if (cancelled) return
+      if (groupsErr || membersErr) { console.warn('[ComHub] Échec du chargement des groupes Supabase', groupsErr || membersErr); return }
+
+      const roleByUserId = new Map((memberRows || []).map(m => [m.user_id, m.role]))
+
+      const mappedGroups = (groupRows || []).map(row => {
+        const gm = row.group_members || []
+        return {
+          id: row.id,
+          workspaceId: activeWorkspace.id,
+          name: row.name,
+          description: row.description || '',
+          memberCount: gm.length,
+          memberIds: gm.map(x => x.user_id),
+          rules: mapCriteriaToRules(row.targeting_type, row.targeting_criteria),
+        }
+      })
+
+      const profileById = new Map()
+      for (const row of groupRows || []) {
+        for (const gm of row.group_members || []) {
+          if (gm.profiles) profileById.set(gm.profiles.id, gm.profiles)
+        }
+      }
+      const mappedMembers = Array.from(profileById.values()).map(p => ({
+        id: p.id,
+        workspaceId: activeWorkspace.id,
+        full_name: p.full_name,
+        avatar: getInitials(p.full_name),
+        color: pickColor(p.id),
+        role: roleByUserId.get(p.id) || 'member',
+        profession: p.profession || '',
+        skills: p.skills || [],
+        photoUrl: p.avatar_url || undefined,
+      }))
+      mergeRemoteMembers(mappedMembers)
+
+      setLocalGroups(prev => {
+        const byId = new Map(prev.map(g => [g.id, g]))
+        for (const g of mappedGroups) byId.set(g.id, g)
+        return Array.from(byId.values())
+      })
+    }
+
+    loadGroups()
+    return () => { cancelled = true }
+  }, [activeWorkspace.id, mergeRemoteMembers])
+
   const canManage = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
 
-  const handleCreate = ({ name, description, rules }) => {
+  const handleCreate = async ({ name, description, rules }) => {
+    if (isSupabaseConfigured && isRealWorkspaceId(activeWorkspace.id)) {
+      setCreateError('')
+      setCreating(true)
+      const { targeting_type, targeting_criteria } = deriveTargeting(rules)
+      const { data, error } = await supabase.from('groups')
+        .insert({ organization_id: activeWorkspace.id, name, description: description || null, targeting_type, targeting_criteria })
+        .select('id, name, description, targeting_type, targeting_criteria')
+        .single()
+      setCreating(false)
+      if (error) {
+        console.warn('[ComHub] Échec de la création du groupe Supabase', error)
+        setCreateError('Impossible de créer le groupe. Réessayez.')
+        return
+      }
+      setLocalGroups(prev => [
+        { id: data.id, workspaceId: activeWorkspace.id, name: data.name, description: data.description || '', memberCount: 0, memberIds: [], rules: mapCriteriaToRules(data.targeting_type, data.targeting_criteria) },
+        ...prev,
+      ])
+      setShowModal(false)
+      return
+    }
+    // Branche mock (inchangée)
     setLocalGroups(prev => [
       { id: `g-${Date.now()}`, workspaceId: activeWorkspace.id, name, description, memberCount: 1, memberIds: [], rules },
       ...prev,
@@ -89,7 +223,38 @@ export default function Groupes() {
     ? (selectedGroup.memberIds || []).map(id => members.find(m => m.id === id)).filter(Boolean)
     : []
 
-  const toggleJoin = (groupId) => {
+  const toggleJoin = async (groupId) => {
+    if (isSupabaseConfigured && isRealWorkspaceId(activeWorkspace.id) && currentUser?.id) {
+      const wasJoined = joinedGroupIds.has(groupId)
+      setJoinError('')
+      const { error } = wasJoined
+        ? await supabase.from('group_members').delete().match({ group_id: groupId, user_id: currentUser.id })
+        : await supabase.from('group_members').insert({ group_id: groupId, user_id: currentUser.id })
+      if (error) {
+        console.warn('[ComHub] Échec du (dés)abonnement au groupe', error)
+        setJoinError(wasJoined ? 'Impossible de quitter ce groupe.' : 'Impossible de rejoindre ce groupe.')
+        return
+      }
+      setJoinedGroupIds(prev => {
+        const next = new Set(prev)
+        wasJoined ? next.delete(groupId) : next.add(groupId)
+        return next
+      })
+      setLocalGroups(prev => prev.map(g => {
+        if (g.id !== groupId) return g
+        const memberIds = wasJoined ? g.memberIds.filter(id => id !== currentUser.id) : Array.from(new Set([...g.memberIds, currentUser.id]))
+        return { ...g, memberIds, memberCount: memberIds.length }
+      }))
+      if (!wasJoined) {
+        mergeRemoteMembers([{
+          id: currentUser.id, workspaceId: activeWorkspace.id, full_name: currentUser.full_name,
+          avatar: currentUser.avatar, color: pickColor(currentUser.id), role: activeWorkspace.role,
+          profession: currentUser.profession || '', skills: currentUser.skills || [], photoUrl: currentUser.avatarUrl || undefined,
+        }])
+      }
+      return
+    }
+    // Branche mock (inchangée)
     setJoinedGroupIds(prev => {
       const next = new Set(prev)
       next.has(groupId) ? next.delete(groupId) : next.add(groupId)
@@ -135,7 +300,12 @@ export default function Groupes() {
       </div>
 
       {showModal && (
-        <GroupRulesModal onClose={() => setShowModal(false)} onCreate={handleCreate} />
+        <GroupRulesModal
+          onClose={() => { setShowModal(false); setCreateError('') }}
+          onCreate={handleCreate}
+          submitting={creating}
+          error={createError}
+        />
       )}
 
       {selectedGroup && (
@@ -145,7 +315,8 @@ export default function Groupes() {
           members={selectedMembers}
           joined={joinedGroupIds.has(selectedGroup.id)}
           onToggleJoin={() => toggleJoin(selectedGroup.id)}
-          onClose={() => setSelectedGroupId(null)}
+          joinError={joinError}
+          onClose={() => { setSelectedGroupId(null); setJoinError('') }}
         />
       )}
     </div>

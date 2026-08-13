@@ -3,7 +3,7 @@ import {
   ChevronLeft, User, Mail, Phone, Lock, Cake, VenetianMask, Briefcase, X as XIcon,
   Hash, Building2, Check, PartyPopper, UsersRound, BookUser, CakeSlice,
 } from 'lucide-react'
-import { groups, genderLabels, workspaceTypeLabels, computeAge, matchGroupRules } from '../data'
+import { groups, genderLabels, workspaceTypeLabels, typeDefaultColor, computeAge, matchGroupRules, getInitials, ORG_TYPE_FROM_DB, pickColor } from '../data'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { useOrganizations } from '../context/OrganizationsContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
@@ -14,21 +14,11 @@ const SUGGESTED_SKILLS = [
   'Santé', 'Finance', 'Logistique', 'Communication', 'Cuisine',
 ]
 
-const AVATAR_COLORS = [
-  'from-amber-500 to-orange-600', 'from-blue-500 to-indigo-600', 'from-emerald-500 to-teal-600',
-  'from-rose-500 to-pink-600', 'from-violet-500 to-purple-600', 'from-cyan-500 to-blue-600',
-]
-
-function getInitials(name) {
-  const parts = name.trim().split(/\s+/).slice(0, 2)
-  return parts.map(w => w[0]?.toUpperCase() || '').join('') || '??'
-}
-
-function pickColor(seed) {
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
-}
+// Clé localStorage utilisée quand la confirmation e-mail est activée côté
+// Supabase : la session n'existe pas encore juste après signUp(), donc la
+// RLS empêche d'écrire dans `memberships`. On rejoue cette adhésion en
+// attente dès la première connexion réussie (voir AuthModal.jsx).
+export const PENDING_JOIN_STORAGE_KEY = 'comhub_pending_join'
 
 function StepHeader({ step, totalSteps, title, subtitle, onBack }) {
   return (
@@ -104,7 +94,7 @@ export default function SignupWizard({ onBackToLogin }) {
   const goToStep2 = (e) => {
     e.preventDefault()
     setError('')
-    if (!fullName.trim() || !phone.trim() || password.length < 6 || !gender || !birthDate) {
+    if (!fullName.trim() || !email.trim() || password.length < 6 || !gender || !birthDate) {
       setError('Merci de compléter tous les champs obligatoires (mot de passe : 6 caractères min.).')
       return
     }
@@ -128,21 +118,40 @@ export default function SignupWizard({ onBackToLogin }) {
 
     let org
     let role
+    let supabaseOrgId = null // renseigné uniquement si l'organisation rejointe existe réellement dans Supabase
 
     if (joinMode === 'join') {
       org = findOrgByJoinCode(joinCode)
-      if (!org) {
+      if (org) {
+        role = 'member'
+      } else if (isSupabaseConfigured) {
+        // Le code ne correspond à aucune organisation de démonstration locale :
+        // on tente une résolution côté Supabase via la RPC dédiée (contourne
+        // la RLS "membres uniquement" le temps de vérifier le code).
+        const { data: matches, error: lookupError } = await supabase
+          .rpc('find_organization_by_code', { p_code: joinCode.trim() })
+        const dbOrg = matches?.[0]
+        if (lookupError || !dbOrg) {
+          setError('Code d\'organisation introuvable. Vérifiez le code auprès de votre organisation.')
+          return
+        }
+        supabaseOrgId = dbOrg.id
+        const frontendType = ORG_TYPE_FROM_DB[dbOrg.type] || 'church'
+        org = {
+          id: dbOrg.id,
+          name: dbOrg.name,
+          type: frontendType,
+          color: typeDefaultColor[frontendType] || typeDefaultColor.church,
+          joinCode: dbOrg.code_invitation,
+        }
+        role = 'member'
+      } else {
         setError('Code d\'organisation introuvable. Vérifiez le code auprès de votre organisation.')
         return
       }
-      role = 'member'
     } else {
       if (!orgName.trim() || !orgType) {
         setError('Merci de renseigner le nom et le type de la nouvelle organisation.')
-        return
-      }
-      if (orgRole === 'admin' && !email.trim()) {
-        setError('L\'e-mail est obligatoire pour un compte administrateur.')
         return
       }
       org = createOrganization({ name: orgName.trim(), type: orgType })
@@ -165,14 +174,8 @@ export default function SignupWizard({ onBackToLogin }) {
         profession: profession.trim(),
         skills,
       }
-      // E-mail privilégié quand il est renseigné (fonctionne sans config
-      // supplémentaire) ; sinon téléphone — nécessite qu'un fournisseur SMS
-      // soit configuré côté Supabase (Authentication > Providers > Phone).
-      const useEmail = Boolean(email.trim())
       const { data, error: authError } = await supabase.auth.signUp(
-        useEmail
-          ? { email: email.trim(), password, options: { data: metadata } }
-          : { phone: phone.trim(), password, options: { data: metadata } }
+        { email: email.trim(), password, options: { data: metadata } }
       )
       setSubmitting(false)
 
@@ -182,11 +185,36 @@ export default function SignupWizard({ onBackToLogin }) {
       }
 
       supabaseUserId = data.user?.id ?? null
+
+      // Rattachement réel à l'organisation Supabase rejointe. Passe par la RPC
+      // `join_organization_by_code`, qui revérifie le code côté serveur avant
+      // d'écrire dans `memberships` (la RLS n'autorise plus l'auto-inscription
+      // directe depuis le client) — déclenche aussi l'auto-affectation aux
+      // groupes côté base de données.
+      if (supabaseOrgId && supabaseUserId) {
+        if (data.session) {
+          // Session active tout de suite (confirmation e-mail désactivée).
+          const { error: joinError } = await supabase
+            .rpc('join_organization_by_code', { p_code: joinCode.trim() })
+          if (joinError) {
+            setError(`Compte créé, mais l'adhésion à l'organisation a échoué : ${joinError.message}`)
+            return
+          }
+        } else {
+          // Confirmation e-mail/SMS requise : pas de session, donc la RPC
+          // (qui exige auth.uid()) échouerait. On mémorise le code pour
+          // finaliser l'adhésion à la première connexion réussie (voir AuthModal.jsx).
+          localStorage.setItem(
+            PENDING_JOIN_STORAGE_KEY,
+            JSON.stringify({ userId: supabaseUserId, joinCode: joinCode.trim() })
+          )
+        }
+      }
+
       if (data.user && !data.session) {
         setSupabaseNotice(
-          useEmail
-            ? 'Compte Supabase créé : vérifiez votre boîte mail pour confirmer votre adresse avant de pouvoir vous connecter.'
-            : 'Compte Supabase créé : confirmez le code reçu par SMS avant de pouvoir vous connecter.'
+          'Compte Supabase créé : vérifiez votre boîte mail pour confirmer votre adresse avant de pouvoir vous connecter.'
+          + (supabaseOrgId ? ' Votre adhésion à ' + org.name + ' sera finalisée automatiquement dès votre première connexion.' : '')
         )
       }
     }
@@ -255,18 +283,18 @@ export default function SignupWizard({ onBackToLogin }) {
               />
             </div>
             <div className="relative">
-              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
-                type="tel" required value={phone} onChange={e => setPhone(e.target.value)}
-                placeholder="Numéro de téléphone"
+                type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="E-mail"
                 className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all"
               />
             </div>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="E-mail (optionnel, sauf pour un compte admin)"
+                type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                placeholder="Numéro de téléphone (optionnel)"
                 className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all"
               />
             </div>
@@ -472,17 +500,6 @@ export default function SignupWizard({ onBackToLogin }) {
                   ))}
                 </div>
               </div>
-
-              {orgRole === 'admin' && (
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input
-                    type="email" required={orgRole === 'admin'} value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder="E-mail (requis pour un compte admin)"
-                    className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all"
-                  />
-                </div>
-              )}
             </div>
           )}
 

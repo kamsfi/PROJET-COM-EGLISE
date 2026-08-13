@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Users, Radio, Hand, Share2, Send, Heart, Sparkles, HandHeart } from 'lucide-react'
-import { prayerRequests, prayerCategories, buildPrayerEntry } from '../data'
+import { prayerRequests, prayerCategories, buildPrayerEntry, isUuid, getInitials, pickColor } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import AIAssistantModal from './AIAssistantModal'
 
 const LIVE_SUBJECT_BY_TYPE = {
   church: 'Culte du Dimanche',
   business: 'Réunion Générale',
   ngo: 'Point de Coordination Terrain',
+}
+
+// Heure pour une intention du jour, date courte sinon.
+function formatPrayerTime(isoString) {
+  const date = new Date(isoString)
+  const now = new Date()
+  const sameDay = date.toDateString() === now.toDateString()
+  return sameDay
+    ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
 }
 
 function LiveCard({ onJoin, onGenerateReport, subject }) {
@@ -164,18 +175,20 @@ function VideoCall({ onLeave, onGenerateReport, subject }) {
   )
 }
 
-function PrayerForm({ onSubmitPrayer }) {
+function PrayerForm({ onSubmitPrayer, submitting = false, error = '' }) {
   const [submitted, setSubmitted] = useState(false)
   const [prayer, setPrayer] = useState('')
   const [category, setCategory] = useState(prayerCategories[0].id)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!prayer.trim()) return
-    onSubmitPrayer(category, prayer.trim())
-    setPrayer('')
-    setSubmitted(true)
-    setTimeout(() => setSubmitted(false), 2500)
+    if (!prayer.trim() || submitting) return
+    const ok = await onSubmitPrayer(category, prayer.trim())
+    if (ok) {
+      setPrayer('')
+      setSubmitted(true)
+      setTimeout(() => setSubmitted(false), 2500)
+    }
   }
 
   return (
@@ -220,13 +233,14 @@ function PrayerForm({ onSubmitPrayer }) {
           rows={3}
           className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none"
         />
+        {error && <p className="text-xs text-red-400 px-1">{error}</p>}
         <button
           type="submit"
-          disabled={!prayer.trim()}
+          disabled={!prayer.trim() || submitting}
           className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
         >
           <Send className="w-4 h-4" />
-          Soumettre mon intention
+          {submitting ? 'Envoi…' : 'Soumettre mon intention'}
         </button>
       </form>
     </div>
@@ -276,15 +290,94 @@ export default function DirectPrieres() {
   const [showAISummary, setShowAISummary] = useState(false)
   const [prayers, setPrayers] = useState(() => prayerRequests.filter(p => p.workspaceId === activeWorkspace.id))
   const [prayedIds, setPrayedIds] = useState(new Set())
+  // Jamais réinitialisé au changement d'espace — même cycle de vie que
+  // dynamicAnnouncements dans Canaux.jsx.
+  const [realPrayers, setRealPrayers] = useState([])
+  const [realPrayedIds, setRealPrayedIds] = useState(new Set())
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const isRealWorkspace = isUuid(activeWorkspace.id)
 
   useEffect(() => {
     setPrayers(prayerRequests.filter(p => p.workspaceId === activeWorkspace.id))
     setPrayedIds(new Set())
   }, [activeWorkspace.id])
 
+  // Charge les vraies intentions de prière Supabase de l'espace actif.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isUuid(activeWorkspace.id)) return
+    let cancelled = false
+
+    async function loadPrayers() {
+      const { data: rows, error } = await supabase
+        .from('prayer_requests')
+        .select('id, category, content, created_at, profiles!prayer_requests_author_id_fkey(id, full_name), prayer_reactions(user_id)')
+        .eq('organization_id', activeWorkspace.id)
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (error) { console.warn('[ComHub] Échec du chargement des intentions de prière Supabase', error); return }
+
+      const mapped = (rows || []).map(row => ({
+        id: row.id,
+        workspaceId: activeWorkspace.id,
+        author: row.profiles?.full_name || 'Utilisateur supprimé',
+        avatar: row.profiles?.full_name ? getInitials(row.profiles.full_name) : '??',
+        color: pickColor(row.profiles?.id || row.id),
+        category: row.category,
+        content: row.content,
+        time: formatPrayerTime(row.created_at),
+        prayCount: (row.prayer_reactions || []).length,
+      }))
+
+      const myPrayedIds = (rows || [])
+        .filter(row => (row.prayer_reactions || []).some(r => r.user_id === currentUser.id))
+        .map(row => row.id)
+
+      setRealPrayers(prev => {
+        const byId = new Map(prev.map(p => [p.id, p]))
+        for (const p of mapped) byId.set(p.id, p)
+        return Array.from(byId.values())
+      })
+      setRealPrayedIds(prev => new Set([...prev, ...myPrayedIds]))
+    }
+
+    loadPrayers()
+    return () => { cancelled = true }
+  }, [activeWorkspace.id, currentUser.id])
+
   const subject = LIVE_SUBJECT_BY_TYPE[activeWorkspace.type] || LIVE_SUBJECT_BY_TYPE.church
 
-  const handleSubmitPrayer = (category, content) => {
+  const handleSubmitPrayer = async (category, content) => {
+    if (isSupabaseConfigured && isUuid(activeWorkspace.id)) {
+      setSubmitError('')
+      setSubmitting(true)
+      const { data, error } = await supabase.from('prayer_requests')
+        .insert({ organization_id: activeWorkspace.id, author_id: currentUser.id, category, content })
+        .select('id, created_at')
+        .single()
+      setSubmitting(false)
+      if (error) {
+        console.warn('[ComHub] Échec de la soumission de l\'intention de prière Supabase', error)
+        setSubmitError('Impossible de soumettre votre intention. Réessayez.')
+        return false
+      }
+      setRealPrayers(prev => [
+        {
+          id: data.id,
+          workspaceId: activeWorkspace.id,
+          author: currentUser.full_name,
+          avatar: currentUser.avatar,
+          color: 'from-gold to-orange-600',
+          category,
+          content,
+          time: 'À l\'instant',
+          prayCount: 0,
+        },
+        ...prev,
+      ])
+      return true
+    }
+    // Branche mock (inchangée dans son résultat)
     const entry = buildPrayerEntry({
       author: currentUser.full_name,
       avatar: currentUser.avatar,
@@ -294,9 +387,36 @@ export default function DirectPrieres() {
       workspaceId: activeWorkspace.id,
     })
     setPrayers(prev => [entry, ...prev])
+    return true
   }
 
-  const togglePray = (prayerId) => {
+  const togglePray = async (prayerId) => {
+    if (isRealWorkspace) {
+      const alreadyPrayed = realPrayedIds.has(prayerId)
+      setRealPrayedIds(prev => {
+        const next = new Set(prev)
+        alreadyPrayed ? next.delete(prayerId) : next.add(prayerId)
+        return next
+      })
+      setRealPrayers(prev => prev.map(p => p.id === prayerId ? { ...p, prayCount: p.prayCount + (alreadyPrayed ? -1 : 1) } : p))
+
+      const { error } = alreadyPrayed
+        ? await supabase.from('prayer_reactions').delete().match({ prayer_request_id: prayerId, user_id: currentUser.id })
+        : await supabase.from('prayer_reactions').insert({ prayer_request_id: prayerId, user_id: currentUser.id })
+
+      if (error && error.code !== '23505') {
+        console.warn('[ComHub] Échec de la mise à jour de la prière Supabase', error)
+        setRealPrayedIds(prev => {
+          const next = new Set(prev)
+          alreadyPrayed ? next.add(prayerId) : next.delete(prayerId)
+          return next
+        })
+        setRealPrayers(prev => prev.map(p => p.id === prayerId ? { ...p, prayCount: p.prayCount + (alreadyPrayed ? 1 : -1) } : p))
+      }
+      return
+    }
+
+    // Branche mock (inchangée)
     setPrayedIds(prev => {
       const next = new Set(prev)
       if (next.has(prayerId)) {
@@ -309,6 +429,10 @@ export default function DirectPrieres() {
       return next
     })
   }
+
+  const visiblePrayers = isRealWorkspace
+    ? realPrayers.filter(p => p.workspaceId === activeWorkspace.id)
+    : prayers
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
@@ -323,17 +447,22 @@ export default function DirectPrieres() {
           onJoin={() => setInCall(true)}
           onGenerateReport={() => setShowAISummary(true)}
         />
-        <PrayerForm onSubmitPrayer={handleSubmitPrayer} />
+        <PrayerForm onSubmitPrayer={handleSubmitPrayer} submitting={submitting} error={submitError} />
 
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-2 px-1">
-            Intentions de la communauté {prayers.length > 0 && `(${prayers.length})`}
+            Intentions de la communauté {visiblePrayers.length > 0 && `(${visiblePrayers.length})`}
           </h3>
           <div className="space-y-3">
-            {prayers.map(p => (
-              <PrayerCard key={p.id} prayer={p} prayed={prayedIds.has(p.id)} onPray={togglePray} />
+            {visiblePrayers.map(p => (
+              <PrayerCard
+                key={p.id}
+                prayer={p}
+                prayed={isRealWorkspace ? realPrayedIds.has(p.id) : prayedIds.has(p.id)}
+                onPray={togglePray}
+              />
             ))}
-            {prayers.length === 0 && (
+            {visiblePrayers.length === 0 && (
               <div className="text-center text-slate-500 py-8 text-sm bg-night-800/50 rounded-2xl border border-slate-800">
                 Aucune intention pour le moment · soyez le premier à partager
               </div>

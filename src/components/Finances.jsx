@@ -1,11 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Wallet, HandCoins, Smartphone, Landmark, Copy, Check, Calendar, CheckCircle2, Sparkles } from 'lucide-react'
-import { financeCopyByType, pledgeFrequencies, paymentInfo, contributionHistory, currencies, formatAmount } from '../data'
+import { financeCopyByType, pledgeFrequencies, paymentInfo, contributionHistory, currencies, formatAmount, isUuid } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import AIAssistantModal from './AIAssistantModal'
 
 const PLEDGE_AMOUNTS = [10, 25, 50, 100, 250]
+
+const STATUS_LABELS = { promesse: 'Promesse', confirme: 'Confirmé', annule: 'Annulé' }
+
+function categoryLabel(id, copy) {
+  return copy.pledgeCategories.find(c => c.id === id)?.label || id
+}
 
 function CurrencySelect({ currency, onChange }) {
   return (
@@ -22,7 +29,7 @@ function CurrencySelect({ currency, onChange }) {
   )
 }
 
-function PledgeForm({ copy, currency }) {
+function PledgeForm({ copy, currency, onSubmit, submitting = false, error = '' }) {
   const [selected, setSelected] = useState(50)
   const [custom, setCustom] = useState('')
   const [frequency, setFrequency] = useState('monthly')
@@ -32,10 +39,13 @@ function PledgeForm({ copy, currency }) {
   const amount = custom ? parseInt(custom) || 0 : selected
   const currencySymbol = currencies.find(c => c.code === currency)?.symbol || '€'
 
-  const handleSubmit = () => {
-    if (amount <= 0) return
-    setConfirmed(true)
-    setTimeout(() => setConfirmed(false), 4000)
+  const handleSubmit = async () => {
+    if (amount <= 0 || submitting) return
+    const ok = await onSubmit({ amount, category, frequency })
+    if (ok) {
+      setConfirmed(true)
+      setTimeout(() => setConfirmed(false), 4000)
+    }
   }
 
   return (
@@ -122,12 +132,13 @@ function PledgeForm({ copy, currency }) {
               ))}
             </div>
 
+            {error && <p className="text-xs text-red-400 px-1 mb-3">{error}</p>}
             <button
               onClick={handleSubmit}
-              disabled={amount <= 0}
+              disabled={amount <= 0 || submitting}
               className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
             >
-              Confirmer {formatAmount(amount, currency)} · {pledgeFrequencies.find(f => f.id === frequency)?.label}
+              {submitting ? 'Envoi…' : `Confirmer ${formatAmount(amount, currency)} · ${pledgeFrequencies.find(f => f.id === frequency)?.label}`}
             </button>
           </>
         )}
@@ -199,13 +210,13 @@ function HistoryCard({ history, currency }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-200">{h.category}</p>
             <p className="text-xs text-slate-500">
-              {new Date(h.date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })} · {h.method}
+              {new Date(h.date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}{h.method ? ` · ${h.method}` : ''}
             </p>
           </div>
           <div className="text-right shrink-0">
             <p className="text-sm font-semibold text-slate-100">{formatAmount(h.amount, currency)}</p>
-            <p className="text-[10px] text-emerald-400 flex items-center gap-1 justify-end">
-              <CheckCircle2 className="w-3 h-3" />
+            <p className={`text-[10px] flex items-center gap-1 justify-end ${h.confirmed === false ? 'text-slate-500' : 'text-emerald-400'}`}>
+              {h.confirmed === false ? <Calendar className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
               {h.status}
             </p>
           </div>
@@ -222,10 +233,106 @@ export default function Finances() {
   const { activeWorkspace } = useWorkspace()
   const { currentUser, updateCurrentUser } = useCurrentUser()
   const [showAIReport, setShowAIReport] = useState(false)
+  // Jamais réinitialisé au changement d'espace — upsert par id (vrai
+  // historique chargé + promesses soumises pendant la session).
+  const [dynamicHistory, setDynamicHistory] = useState([])
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const copy = financeCopyByType[activeWorkspace.type]
-  const history = contributionHistory.filter(h => h.workspaceId === activeWorkspace.id)
-  const total = history.reduce((sum, h) => sum + h.amount, 0)
   const currency = currentUser.currency || 'EUR'
+  const isRealWorkspace = isUuid(activeWorkspace.id)
+
+  // Charge le vrai historique Supabase de l'espace actif (RLS limite déjà
+  // aux propres contributions, sauf pour un admin qui voit tout).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isUuid(activeWorkspace.id)) return
+    let cancelled = false
+
+    async function loadHistory() {
+      const { data: rows, error } = await supabase
+        .from('contributions')
+        .select('id, amount, currency_code, category, frequency, status, created_at')
+        .eq('organization_id', activeWorkspace.id)
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (error) { console.warn('[ComHub] Échec du chargement des contributions Supabase', error); return }
+
+      const mapped = (rows || []).map(row => ({
+        id: row.id,
+        workspaceId: activeWorkspace.id,
+        date: row.created_at.slice(0, 10),
+        amount: Number(row.amount),
+        category: categoryLabel(row.category, copy),
+        method: null,
+        status: STATUS_LABELS[row.status] || row.status,
+        confirmed: row.status === 'confirme',
+      }))
+
+      setDynamicHistory(prev => {
+        const byId = new Map(prev.map(h => [h.id, h]))
+        for (const h of mapped) byId.set(h.id, h)
+        return Array.from(byId.values())
+      })
+    }
+
+    loadHistory()
+    return () => { cancelled = true }
+  }, [activeWorkspace.id, copy])
+
+  const handlePledgeSubmit = async ({ amount, category, frequency }) => {
+    if (isSupabaseConfigured && isUuid(activeWorkspace.id)) {
+      setSubmitError('')
+      setSubmitting(true)
+      const { data, error } = await supabase.from('contributions')
+        .insert({ organization_id: activeWorkspace.id, user_id: currentUser.id, amount, currency_code: currency, category, frequency })
+        .select('id, created_at')
+        .single()
+      setSubmitting(false)
+      if (error) {
+        console.warn('[ComHub] Échec de l\'enregistrement de la promesse Supabase', error)
+        setSubmitError('Impossible d\'enregistrer votre promesse. Réessayez.')
+        return false
+      }
+      setDynamicHistory(prev => [
+        {
+          id: data.id,
+          workspaceId: activeWorkspace.id,
+          date: data.created_at.slice(0, 10),
+          amount,
+          category: categoryLabel(category, copy),
+          method: null,
+          status: STATUS_LABELS.promesse,
+          confirmed: false,
+        },
+        ...prev,
+      ])
+      return true
+    }
+    // Branche mock : pas de vraie persistance possible (pas de backend),
+    // mais affichée dans l'historique de la session — corrige au passage
+    // le comportement actuel où la promesse disparaissait sans laisser de
+    // trace, incohérent avec tous les autres modules en mode démo.
+    setDynamicHistory(prev => [
+      {
+        id: `pledge-${Date.now()}`,
+        workspaceId: activeWorkspace.id,
+        date: new Date().toISOString().slice(0, 10),
+        amount,
+        category: categoryLabel(category, copy),
+        method: null,
+        status: STATUS_LABELS.promesse,
+        confirmed: false,
+      },
+      ...prev,
+    ])
+    return true
+  }
+
+  const dynamicWorkspaceHistory = dynamicHistory.filter(h => h.workspaceId === activeWorkspace.id)
+  const history = isRealWorkspace
+    ? dynamicWorkspaceHistory
+    : [...dynamicWorkspaceHistory, ...contributionHistory.filter(h => h.workspaceId === activeWorkspace.id)]
+  const total = history.reduce((sum, h) => sum + h.amount, 0)
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
@@ -265,7 +372,7 @@ export default function Finances() {
           </button>
         </div>
 
-        <PledgeForm copy={copy} currency={currency} />
+        <PledgeForm copy={copy} currency={currency} onSubmit={handlePledgeSubmit} submitting={submitting} error={submitError} />
         <PaymentInfoCard />
         <HistoryCard history={history} currency={currency} />
 

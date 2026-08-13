@@ -13,7 +13,7 @@ const MARITAL_OPTIONS = [
   { id: 'married', label: 'Marié(e)' },
 ]
 
-export default function GroupRulesModal({ onClose, onCreate }) {
+export default function GroupRulesModal({ onClose, onCreate, submitting = false, error = '' }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [gender, setGender] = useState('all')
@@ -25,7 +25,7 @@ export default function GroupRulesModal({ onClose, onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim() || submitting) return
 
     onCreate({
       name: name.trim(),
@@ -151,12 +151,14 @@ export default function GroupRulesModal({ onClose, onCreate }) {
             </div>
           </div>
 
+          {error && <p className="text-xs text-red-400 px-1">{error}</p>}
+
           <button
             type="submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || submitting}
             className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
           >
-            Créer le groupe
+            {submitting ? 'Création…' : 'Créer le groupe'}
           </button>
         </form>
       </div>

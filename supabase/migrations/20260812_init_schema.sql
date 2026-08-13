@@ -401,6 +401,26 @@ drop policy if exists "organizations_update_admin" on public.organizations;
 create policy "organizations_update_admin" on public.organizations
   for update using (public.is_admin_of(id));
 
+-- Résolution d'un code d'invitation en organisation, utilisée par l'écran
+-- d'inscription "Rejoindre une organisation" AVANT que l'utilisateur ne soit
+-- membre (donc avant que la policy organizations_select_member ne s'applique).
+-- security definer + retour limité aux champs non sensibles : ne permet pas
+-- de lister/parcourir les organisations, seulement de résoudre un code connu.
+create or replace function public.find_organization_by_code(p_code text)
+returns table (id uuid, name text, type organization_type, code_invitation text)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select o.id, o.name, o.type, o.code_invitation
+  from public.organizations o
+  where upper(o.code_invitation) = upper(p_code)
+  limit 1;
+$$;
+
+grant execute on function public.find_organization_by_code(text) to anon, authenticated;
+
 -- ---------- profiles ----------
 drop policy if exists "profiles_select_self" on public.profiles;
 create policy "profiles_select_self" on public.profiles
@@ -431,13 +451,16 @@ drop policy if exists "memberships_select_same_org" on public.memberships;
 create policy "memberships_select_same_org" on public.memberships
   for select using (public.is_member_of(organization_id));
 
--- Insertion autorisée dans 3 cas :
+-- Insertion autorisée dans 2 cas :
 --   1) un admin de l'organisation ajoute qui il veut, avec le rôle voulu ;
 --   2) amorçage : le tout premier membre d'une organisation sans encore
---      aucun membre s'auto-désigne admin (fondateur) ;
---   3) auto-inscription : un utilisateur rejoint une organisation
---      existante pour lui-même, uniquement avec le rôle 'member'
---      (le contrôle du code d'invitation se fait côté application).
+--      aucun membre s'auto-désigne admin (fondateur).
+-- L'auto-inscription en tant que "member" ne passe volontairement PAS par
+-- cette policy : elle exigerait sinon uniquement de connaître l'UUID de
+-- l'organisation (pas son code d'invitation) pour la rejoindre. Elle passe
+-- exclusivement par la fonction `join_organization_by_code` ci-dessous, qui
+-- vérifie le code côté serveur avant d'écrire (security definer, contourne
+-- volontairement cette RLS le temps de l'insertion qu'elle contrôle elle-même).
 drop policy if exists "memberships_insert" on public.memberships;
 create policy "memberships_insert" on public.memberships
   for insert with check (
@@ -450,8 +473,39 @@ create policy "memberships_insert" on public.memberships
         where m.organization_id = memberships.organization_id
       )
     )
-    or (user_id = auth.uid() and role = 'member')
   );
+
+-- Auto-inscription sécurisée : vérifie le code d'invitation côté serveur
+-- puis crée l'adhésion "member" pour l'appelant authentifié. security
+-- definer -> contourne intentionnellement `memberships_insert` ci-dessus
+-- (qui n'autorise plus l'auto-inscription directe depuis le client).
+create or replace function public.join_organization_by_code(p_code text)
+returns table (id uuid, name text, type organization_type, code_invitation text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org public.organizations;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentification requise.';
+  end if;
+
+  select * into v_org from public.organizations o where upper(o.code_invitation) = upper(p_code) limit 1;
+  if not found then
+    raise exception 'Code d''organisation introuvable.';
+  end if;
+
+  insert into public.memberships (user_id, organization_id, role)
+  values (auth.uid(), v_org.id, 'member')
+  on conflict (user_id, organization_id) do nothing;
+
+  return query select v_org.id, v_org.name, v_org.type, v_org.code_invitation;
+end;
+$$;
+
+grant execute on function public.join_organization_by_code(text) to authenticated;
 
 drop policy if exists "memberships_update_admin" on public.memberships;
 create policy "memberships_update_admin" on public.memberships

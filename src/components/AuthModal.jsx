@@ -1,8 +1,24 @@
 import { useState } from 'react'
-import { Phone, Lock, Layers, Eye, EyeOff, Sparkles, ChevronLeft, Check } from 'lucide-react'
+import { Mail, Lock, Layers, Eye, EyeOff, Sparkles, ChevronLeft, Check } from 'lucide-react'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
-import SignupWizard from './SignupWizard'
+import SignupWizard, { PENDING_JOIN_STORAGE_KEY } from './SignupWizard'
+
+// Finalise une adhésion à une organisation Supabase mise en attente lors de
+// l'inscription (cas où la confirmation e-mail/SMS était requise et où la
+// session n'existait pas encore pour écrire dans `memberships`).
+async function completePendingJoin(userId) {
+  const raw = localStorage.getItem(PENDING_JOIN_STORAGE_KEY)
+  if (!raw) return
+  localStorage.removeItem(PENDING_JOIN_STORAGE_KEY)
+  try {
+    const pending = JSON.parse(raw)
+    if (pending.userId !== userId) return
+    await supabase.rpc('join_organization_by_code', { p_code: pending.joinCode })
+  } catch {
+    // best-effort : une adhésion en attente perdue n'empêche pas la connexion
+  }
+}
 
 function ResetPasswordPanel({ onBack }) {
   const [identifier, setIdentifier] = useState('')
@@ -42,13 +58,13 @@ function ResetPasswordPanel({ onBack }) {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
-            <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
-              type="text"
+              type="email"
               required
               value={identifier}
               onChange={e => setIdentifier(e.target.value)}
-              placeholder="Téléphone ou e-mail"
+              placeholder="E-mail"
               className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all"
             />
           </div>
@@ -83,10 +99,10 @@ function LoginPanel({ onSwitchToSignup }) {
     setSubmitting(true)
 
     if (isSupabaseConfigured) {
-      const credentials = identifier.includes('@')
-        ? { email: identifier.trim(), password }
-        : { phone: identifier.trim(), password }
-      const { error: authError } = await supabase.auth.signInWithPassword(credentials)
+      const { data: signInData, error: authError } = await supabase.auth.signInWithPassword({
+        email: identifier.trim(),
+        password,
+      })
       setSubmitting(false)
 
       if (authError) {
@@ -94,19 +110,13 @@ function LoginPanel({ onSwitchToSignup }) {
         return
       }
 
-      // Le compte Supabase est authentifié ; l'espace de travail (organisations,
-      // groupes...) reste piloté par les données de démonstration locales tant
-      // que cette partie n'est pas branchée. On raccorde ici la session réelle
-      // à un profil local du même téléphone/e-mail si un correspond.
-      const localMatch = findUserByIdentifier(identifier)
-      if (localMatch) {
-        login(localMatch.id)
-      } else {
-        setError(
-          'Connexion Supabase réussie, mais aucun espace de travail local ne correspond encore à ce compte. ' +
-          'Utilisez l\'Accès Démo Rapide ci-dessous ou inscrivez-vous pour explorer ComHub.'
-        )
+      if (signInData.user) {
+        await completePendingJoin(signInData.user.id)
       }
+
+      // La session réelle est reprise automatiquement par CurrentUserContext
+      // (écoute `onAuthStateChange`), qui charge le vrai profil/espace de
+      // travail — rien d'autre à faire ici.
       return
     }
 
@@ -115,7 +125,7 @@ function LoginPanel({ onSwitchToSignup }) {
       const user = findUserByIdentifier(identifier)
       setSubmitting(false)
       if (!user) {
-        setError('Aucun compte trouvé avec ce numéro ou cet e-mail. Essayez l\'accès démo rapide ou inscrivez-vous.')
+        setError('Aucun compte trouvé avec cet e-mail. Essayez l\'accès démo rapide ou inscrivez-vous.')
         return
       }
       login(user.id)
@@ -149,13 +159,13 @@ function LoginPanel({ onSwitchToSignup }) {
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="relative">
-          <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
-            type="text"
+            type="email"
             required
             value={identifier}
             onChange={e => setIdentifier(e.target.value)}
-            placeholder="Téléphone ou e-mail"
+            placeholder="E-mail"
             className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all"
           />
         </div>
