@@ -341,7 +341,7 @@ export default function Evenements() {
               key={event.id}
               event={event}
               categories={categories}
-              registered={!!registrations[event.id]}
+              registered={isRealWorkspace ? realRegisteredIds.has(event.id) : !!registrations[event.id]}
               onToggleRegister={toggleRegister}
             />
           ))}
@@ -354,8 +354,10 @@ export default function Evenements() {
       {showCreate && (
         <CreateEventModal
           categories={categories}
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setShowCreate(false); setCreateError('') }}
           onCreate={handleCreate}
+          submitting={creating}
+          error={createError}
         />
       )}
     </div>
