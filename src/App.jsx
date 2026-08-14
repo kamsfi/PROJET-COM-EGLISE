@@ -11,6 +11,7 @@ import Finances from './components/Finances'
 import ProfilWorkspace from './components/ProfilWorkspace'
 import RoleBadge from './components/RoleBadge'
 import AuthModal from './components/AuthModal'
+import NoWorkspaceScreen from './components/NoWorkspaceScreen'
 import WorkspaceSwitcher from './components/WorkspaceSwitcher'
 import Avatar from './components/Avatar'
 import AdminAssistant from './components/AdminAssistant'
@@ -48,6 +49,14 @@ function AppShell() {
     return (
       <div className="h-screen w-screen bg-night-900" style={{ backgroundColor: '#020617' }}>
         <AuthModal />
+      </div>
+    )
+  }
+
+  if (!activeWorkspace) {
+    return (
+      <div className="h-screen w-screen bg-night-900" style={{ backgroundColor: '#020617' }}>
+        <NoWorkspaceScreen />
       </div>
     )
   }
