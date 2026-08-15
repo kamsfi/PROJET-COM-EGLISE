@@ -4,6 +4,7 @@ import { conversations, messagesByConversation, isUuid, getInitials, pickColor }
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { useOrganizations } from '../context/OrganizationsContext'
+import { useNotifications } from '../context/NotificationsContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { uploadAttachment } from '../lib/storage'
 import Avatar from './Avatar'
@@ -74,6 +75,7 @@ export default function Discussions() {
   const { activeWorkspace } = useWorkspace()
   const { currentUser } = useCurrentUser()
   const { members, mergeRemoteMembers } = useOrganizations()
+  const { unreadConversations, setOpenConversationId } = useNotifications()
 
   const [activeId, setActiveId] = useState(null)
   const [mockMessages, setMockMessages] = useState(messagesByConversation)
@@ -96,6 +98,13 @@ export default function Discussions() {
   useEffect(() => {
     setActiveId(null)
   }, [activeWorkspace.id])
+
+  // Déclare le fil actuellement consulté (marque lu, et empêche l'alerte
+  // globale de le remarquer non-lu tant qu'il reste ouvert).
+  useEffect(() => {
+    setOpenConversationId(activeId)
+    return () => setOpenConversationId(null)
+  }, [activeId, setOpenConversationId])
 
   // Charge les vrais membres Supabase de l'espace (pour le sélecteur
   // "Nouvelle conversation") — indépendant, ne suppose pas qu'Annuaire ait
@@ -537,7 +546,10 @@ export default function Discussions() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-slate-100 truncate text-sm">{conv.name}</h3>
+                <h3 className="font-semibold text-slate-100 truncate text-sm flex items-center gap-1.5">
+                  {conv.name}
+                  {unreadConversations.has(conv.id) && <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />}
+                </h3>
                 <span className="text-xs text-slate-500 shrink-0">{conv.time}</span>
               </div>
               <div className="flex items-center justify-between gap-2 mt-0.5">

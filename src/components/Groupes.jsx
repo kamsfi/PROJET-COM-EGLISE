@@ -4,6 +4,7 @@ import { groups as groupsData, getInitials, pickColor, isRealWorkspaceId } from 
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useOrganizations } from '../context/OrganizationsContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
+import { useNotifications } from '../context/NotificationsContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { ruleBadges } from './ruleBadges'
 import GroupRulesModal from './GroupRulesModal'
@@ -60,7 +61,7 @@ const CARD_COLORS = [
   'from-cyan-500 to-blue-600',
 ]
 
-function GroupCard({ group, color, onOpen }) {
+function GroupCard({ group, color, onOpen, unread }) {
   const badges = ruleBadges(group.rules)
 
   return (
@@ -69,13 +70,16 @@ function GroupCard({ group, color, onOpen }) {
       className="bg-night-800 rounded-2xl border border-slate-800 hover:border-gold/40 p-4 text-left transition-colors animate-slide-up"
     >
       <div className="flex items-start gap-3 mb-3">
-        {group.photoUrl ? (
-          <img src={group.photoUrl} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" />
-        ) : (
-          <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shrink-0`}>
-            <UsersRound className="w-5 h-5 text-white" />
-          </div>
-        )}
+        <div className="relative shrink-0">
+          {group.photoUrl ? (
+            <img src={group.photoUrl} alt="" className="w-11 h-11 rounded-xl object-cover" />
+          ) : (
+            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center`}>
+              <UsersRound className="w-5 h-5 text-white" />
+            </div>
+          )}
+          {unread && <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 ring-2 ring-night-800" />}
+        </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-slate-100 text-sm truncate">{group.name}</h3>
           <p className="text-xs text-slate-500">{group.memberCount} membre{group.memberCount > 1 ? 's' : ''}</p>
@@ -112,6 +116,7 @@ export default function Groupes() {
   const { activeWorkspace } = useWorkspace()
   const { members, mergeRemoteMembers } = useOrganizations()
   const { currentUser } = useCurrentUser()
+  const { unreadGroups } = useNotifications()
   const [localGroups, setLocalGroups] = useState(() => groupsData.filter(g => g.workspaceId === activeWorkspace.id))
   const [showModal, setShowModal] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState(null)
@@ -344,6 +349,7 @@ export default function Groupes() {
               group={group}
               color={CARD_COLORS[i % CARD_COLORS.length]}
               onOpen={() => setSelectedGroupId(group.id)}
+              unread={unreadGroups.has(group.id)}
             />
           ))}
         </div>

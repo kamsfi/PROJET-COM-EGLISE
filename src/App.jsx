@@ -18,6 +18,7 @@ import AdminAssistant from './components/AdminAssistant'
 import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext'
 import { CurrentUserProvider, useCurrentUser } from './context/CurrentUserContext'
 import { OrganizationsProvider } from './context/OrganizationsContext'
+import { NotificationsProvider, useNotifications } from './context/NotificationsContext'
 
 const TABS = [
   { id: 'discussions', label: 'Discussions', icon: MessageCircle, component: Discussions },
@@ -31,9 +32,12 @@ const TABS = [
   { id: 'profil', label: 'Profil & Espace', icon: User, component: ProfilWorkspace },
 ]
 
+const UNREAD_TAB_IDS = { discussions: 'hasUnreadDiscussions', groupes: 'hasUnreadGroups' }
+
 function AppShell() {
   const { currentUser, isAuthenticated, sessionLoading, logout } = useCurrentUser()
   const { activeWorkspace } = useWorkspace()
+  const notifications = useNotifications()
   const [activeTab, setActiveTab] = useState('discussions')
   const ActiveComponent = TABS.find(t => t.id === activeTab).component
 
@@ -88,6 +92,7 @@ function AppShell() {
           {TABS.map(tab => {
             const Icon = tab.icon
             const active = activeTab === tab.id
+            const hasUnread = UNREAD_TAB_IDS[tab.id] && notifications[UNREAD_TAB_IDS[tab.id]]
             return (
               <button
                 key={tab.id}
@@ -98,7 +103,10 @@ function AppShell() {
                     : 'text-slate-400 hover:text-slate-100 hover:bg-night-700'
                 }`}
               >
-                <Icon className="w-5 h-5 shrink-0" />
+                <span className="relative shrink-0">
+                  <Icon className="w-5 h-5" />
+                  {hasUnread && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-night-800" />}
+                </span>
                 {tab.label}
               </button>
             )
@@ -152,6 +160,7 @@ function AppShell() {
           {TABS.map(tab => {
             const Icon = tab.icon
             const active = activeTab === tab.id
+            const hasUnread = UNREAD_TAB_IDS[tab.id] && notifications[UNREAD_TAB_IDS[tab.id]]
             return (
               <button
                 key={tab.id}
@@ -160,7 +169,10 @@ function AppShell() {
                   active ? 'text-gold' : 'text-slate-500'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${active ? 'scale-110' : ''} transition-transform`} />
+                <span className="relative">
+                  <Icon className={`w-5 h-5 ${active ? 'scale-110' : ''} transition-transform`} />
+                  {hasUnread && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-night-800" />}
+                </span>
                 <span className="text-[10px] font-medium leading-tight whitespace-nowrap">{tab.label.split(' ')[0]}</span>
                 {active && <span className="w-1 h-1 rounded-full bg-gold mt-0.5" />}
               </button>
@@ -178,9 +190,11 @@ export default function App() {
   return (
     <OrganizationsProvider>
       <CurrentUserProvider>
-        <WorkspaceProvider>
-          <AppShell />
-        </WorkspaceProvider>
+        <NotificationsProvider>
+          <WorkspaceProvider>
+            <AppShell />
+          </WorkspaceProvider>
+        </NotificationsProvider>
       </CurrentUserProvider>
     </OrganizationsProvider>
   )

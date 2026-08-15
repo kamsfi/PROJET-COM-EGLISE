@@ -3,6 +3,7 @@ import { ArrowLeft, UsersRound, Sparkles, Phone, Video, Send, MessageCircle, Inf
 import { ruleBadges } from './ruleBadges'
 import { messagesByGroup, isUuid } from '../data'
 import { useCurrentUser } from '../context/CurrentUserContext'
+import { useNotifications } from '../context/NotificationsContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { uploadAvatarImage, uploadAttachment } from '../lib/storage'
 import AIAssistantModal from './AIAssistantModal'
@@ -17,6 +18,7 @@ function formatChatTime(isoString) {
 
 export default function GroupDetailModal({ group, color, members, joined, onToggleJoin, joinError = '', onClose, canManage = false, onEdit, onPhotoUpdated }) {
   const { currentUser, updateCurrentUser } = useCurrentUser()
+  const { setOpenGroupId } = useNotifications()
   const isReal = isSupabaseConfigured && isUuid(group.id)
   const [tab, setTab] = useState('chat')
   const [mockMessages, setMockMessages] = useState(() => messagesByGroup[group.id] || [])
@@ -41,6 +43,13 @@ export default function GroupDetailModal({ group, color, members, joined, onTogg
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages.length, tab])
+
+  // Ce modal plein écran ne monte que pendant que le groupe est ouvert —
+  // déclare/efface directement au montage/démontage.
+  useEffect(() => {
+    setOpenGroupId(group.id)
+    return () => setOpenGroupId(null)
+  }, [group.id, setOpenGroupId])
 
   // Charge l'historique complet du chat de groupe (tout membre actuel voit
   // tout, quelle que soit sa date d'adhésion) et s'abonne au temps réel.
