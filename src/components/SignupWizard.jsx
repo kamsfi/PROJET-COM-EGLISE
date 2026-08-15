@@ -3,7 +3,7 @@ import {
   ChevronLeft, User, Mail, Phone, Lock, Cake, VenetianMask, Briefcase, X as XIcon,
   Hash, Building2, Check, PartyPopper, UsersRound, BookUser, CakeSlice,
 } from 'lucide-react'
-import { groups, genderLabels, workspaceTypeLabels, typeDefaultColor, computeAge, matchGroupRules, getInitials, ORG_TYPE_FROM_DB, pickColor } from '../data'
+import { groups, genderLabels, workspaceTypeLabels, typeDefaultColor, computeAge, matchGroupRules, getInitials, ORG_TYPE_FROM_DB, ORG_TYPE_TO_DB, generateJoinCode, pickColor } from '../data'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { useOrganizations } from '../context/OrganizationsContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
@@ -19,6 +19,38 @@ const SUGGESTED_SKILLS = [
 // RLS empêche d'écrire dans `memberships`. On rejoue cette adhésion en
 // attente dès la première connexion réussie (voir AuthModal.jsx).
 export const PENDING_JOIN_STORAGE_KEY = 'comhub_pending_join'
+
+// Clé localStorage utilisée quand la confirmation e-mail est activée côté
+// Supabase et que l'utilisateur crée une NOUVELLE organisation (au lieu d'en
+// rejoindre une) : la session n'existe pas encore juste après signUp(), donc
+// la RLS empêche d'écrire dans `organizations`/`memberships`. On rejoue cette
+// création dès la première connexion réussie (voir AuthModal.jsx).
+export const PENDING_CREATE_ORG_STORAGE_KEY = 'comhub_pending_create_org'
+
+// Crée une organisation réelle + rattache son fondateur comme admin. Utilisé
+// à la fois juste après signUp() (session immédiate) et lors de la reprise
+// différée au premier login (voir completePendingOrgCreation dans AuthModal).
+// Le fondateur devient TOUJOURS admin : la policy RLS d'amorçage de
+// `memberships` (aucun membre existant) n'autorise que role = 'admin' pour
+// l'auto-insertion, jamais 'leader'.
+export async function createRealOrganization({ name, type, userId }) {
+  const { data: orgRow, error: orgError } = await supabase.from('organizations')
+    .insert({
+      name,
+      type: ORG_TYPE_TO_DB[type] || 'eglise',
+      code_invitation: generateJoinCode(type),
+      created_by: userId,
+    })
+    .select('id, name, type, code_invitation, parent_id')
+    .single()
+  if (orgError) throw orgError
+
+  const { error: membershipError } = await supabase.from('memberships')
+    .insert({ user_id: userId, organization_id: orgRow.id, role: 'admin' })
+  if (membershipError) throw membershipError
+
+  return orgRow
+}
 
 function StepHeader({ step, totalSteps, title, subtitle, onBack }) {
   return (
@@ -154,8 +186,15 @@ export default function SignupWizard({ onBackToLogin }) {
         setError('Merci de renseigner le nom et le type de la nouvelle organisation.')
         return
       }
-      org = createOrganization({ name: orgName.trim(), type: orgType })
-      role = orgRole
+      // Le fondateur d'une organisation en devient toujours administrateur
+      // (voir createRealOrganization) — en mode démo uniquement, le sélecteur
+      // "Responsable" reste disponible.
+      role = isSupabaseConfigured ? 'admin' : orgRole
+      if (!isSupabaseConfigured) {
+        org = createOrganization({ name: orgName.trim(), type: orgType })
+      }
+      // Branche réelle : org est créée plus bas, une fois l'utilisateur
+      // authentifié (created_by/admin exigent un auth.uid()).
     }
 
     // Inscription réelle Supabase Auth (si .env.local est configuré) : crée
@@ -211,10 +250,37 @@ export default function SignupWizard({ onBackToLogin }) {
         }
       }
 
+      // Création réelle de la nouvelle organisation (branche "create"),
+      // symétrique au rattachement ci-dessus pour la branche "join".
+      let pendingOrgCreation = false
+      if (joinMode !== 'join' && supabaseUserId) {
+        if (data.session) {
+          try {
+            const orgRow = await createRealOrganization({ name: orgName.trim(), type: orgType, userId: supabaseUserId })
+            supabaseOrgId = orgRow.id
+            org = { id: orgRow.id, name: orgRow.name, type: ORG_TYPE_FROM_DB[orgRow.type] || 'church', color: typeDefaultColor[orgType] || typeDefaultColor.church, joinCode: orgRow.code_invitation }
+          } catch (createErr) {
+            setError(`Compte créé, mais la création de l'organisation a échoué : ${createErr.message}`)
+            return
+          }
+        } else {
+          // Confirmation e-mail/SMS requise : pas de session, donc l'insertion
+          // (qui exige auth.uid()) échouerait. On mémorise la demande pour la
+          // rejouer à la première connexion réussie (voir AuthModal.jsx).
+          localStorage.setItem(
+            PENDING_CREATE_ORG_STORAGE_KEY,
+            JSON.stringify({ userId: supabaseUserId, orgName: orgName.trim(), orgType })
+          )
+          pendingOrgCreation = true
+          org = { id: null, name: orgName.trim(), type: orgType, color: typeDefaultColor[orgType] || typeDefaultColor.church }
+        }
+      }
+
       if (data.user && !data.session) {
         setSupabaseNotice(
           'Compte Supabase créé : vérifiez votre boîte mail pour confirmer votre adresse avant de pouvoir vous connecter.'
           + (supabaseOrgId ? ' Votre adhésion à ' + org.name + ' sera finalisée automatiquement dès votre première connexion.' : '')
+          + (pendingOrgCreation ? ' « ' + org.name + ' » sera créée automatiquement dès votre première connexion.' : '')
         )
       }
     }
@@ -485,21 +551,25 @@ export default function SignupWizard({ onBackToLogin }) {
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
-              <div>
-                <p className="text-[11px] text-slate-500 mb-1.5 px-1">Votre rôle</p>
-                <div className="flex bg-night-700 rounded-xl p-1">
-                  {[{ id: 'leader', label: 'Responsable' }, { id: 'admin', label: 'Admin' }].map(r => (
-                    <button
-                      key={r.id} type="button" onClick={() => setOrgRole(r.id)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                        orgRole === r.id ? 'bg-gold text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
+              {isSupabaseConfigured ? (
+                <p className="text-[11px] text-slate-500 px-1">Vous serez administrateur de cette nouvelle organisation.</p>
+              ) : (
+                <div>
+                  <p className="text-[11px] text-slate-500 mb-1.5 px-1">Votre rôle</p>
+                  <div className="flex bg-night-700 rounded-xl p-1">
+                    {[{ id: 'leader', label: 'Responsable' }, { id: 'admin', label: 'Admin' }].map(r => (
+                      <button
+                        key={r.id} type="button" onClick={() => setOrgRole(r.id)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                          orgRole === r.id ? 'bg-gold text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

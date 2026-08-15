@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Mail, Lock, Layers, Eye, EyeOff, Sparkles, ChevronLeft, Check } from 'lucide-react'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
-import SignupWizard, { PENDING_JOIN_STORAGE_KEY } from './SignupWizard'
+import SignupWizard, { PENDING_JOIN_STORAGE_KEY, PENDING_CREATE_ORG_STORAGE_KEY, createRealOrganization } from './SignupWizard'
 
 // Finalise une adhésion à une organisation Supabase mise en attente lors de
 // l'inscription (cas où la confirmation e-mail/SMS était requise et où la
@@ -17,6 +17,22 @@ async function completePendingJoin(userId) {
     await supabase.rpc('join_organization_by_code', { p_code: pending.joinCode })
   } catch {
     // best-effort : une adhésion en attente perdue n'empêche pas la connexion
+  }
+}
+
+// Finalise la création d'une nouvelle organisation mise en attente lors de
+// l'inscription (même cas que ci-dessus, pour la branche "créer" au lieu de
+// "rejoindre").
+async function completePendingOrgCreation(userId) {
+  const raw = localStorage.getItem(PENDING_CREATE_ORG_STORAGE_KEY)
+  if (!raw) return
+  localStorage.removeItem(PENDING_CREATE_ORG_STORAGE_KEY)
+  try {
+    const pending = JSON.parse(raw)
+    if (pending.userId !== userId) return
+    await createRealOrganization({ name: pending.orgName, type: pending.orgType, userId })
+  } catch {
+    // best-effort : une création en attente perdue n'empêche pas la connexion
   }
 }
 
@@ -112,6 +128,7 @@ function LoginPanel({ onSwitchToSignup }) {
 
       if (signInData.user) {
         await completePendingJoin(signInData.user.id)
+        await completePendingOrgCreation(signInData.user.id)
       }
 
       // La session réelle est reprise automatiquement par CurrentUserContext
