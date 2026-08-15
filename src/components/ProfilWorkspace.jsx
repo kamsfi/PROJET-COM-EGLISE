@@ -3,9 +3,12 @@ import {
   Calendar, Hand, Coins, ChevronRight, Plus, Camera, Pencil,
   Phone, Cake, VenetianMask, Users2, Briefcase, Church, Building2, HeartHandshake,
 } from 'lucide-react'
-import { workspaceTypeLabels, maritalStatusLabels, genderLabels } from '../data'
+import { workspaceTypeLabels, maritalStatusLabels, genderLabels, isUuid } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useOrganizations } from '../context/OrganizationsContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { uploadAvatarImage } from '../lib/storage'
 import RoleBadge from './RoleBadge'
 import Avatar from './Avatar'
 import CreateAnnexeModal from './CreateAnnexeModal'
@@ -42,11 +45,17 @@ function InfoRow({ icon: Icon, label, value }) {
 
 export default function ProfilWorkspace() {
   const { workspaces, activeWorkspace, setActiveWorkspaceId } = useWorkspace()
+  const { patchOrganization } = useOrganizations()
   const { demoUsers, currentUserId, setCurrentUserId, currentUser, updateCurrentUser } = useCurrentUser()
   const [annexeParent, setAnnexeParent] = useState(null)
   const [annexeCreated, setAnnexeCreated] = useState(null)
   const [renamingOrg, setRenamingOrg] = useState(null)
+  const [photoError, setPhotoError] = useState('')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [uploadingLogoFor, setUploadingLogoFor] = useState(null)
+  const [logoTargetId, setLogoTargetId] = useState(null)
   const fileInputRef = useRef(null)
+  const logoInputRef = useRef(null)
 
   const birthDateLabel = currentUser.birth_date
     ? new Date(currentUser.birth_date + 'T00:00:00').toLocaleDateString('fr-FR', {
@@ -54,13 +63,52 @@ export default function ProfilWorkspace() {
       })
     : null
 
-  const handlePhotoChange = (e) => {
+  const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ''
+
+    if (isSupabaseConfigured && isUuid(currentUser.id)) {
+      setPhotoError('')
+      setUploadingPhoto(true)
+      try {
+        const url = await uploadAvatarImage(file, 'profiles', currentUser.id)
+        const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', currentUser.id)
+        if (error) throw error
+        updateCurrentUser({ avatarUrl: url })
+      } catch (err) {
+        console.warn('[ComHub] Échec de l\'envoi de la photo de profil', err)
+        setPhotoError('Impossible d\'enregistrer la photo. Réessayez.')
+      } finally {
+        setUploadingPhoto(false)
+      }
+      return
+    }
+
+    // Branche mock (inchangée)
     const reader = new FileReader()
     reader.onload = () => updateCurrentUser({ avatarUrl: reader.result })
     reader.readAsDataURL(file)
+  }
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files?.[0]
+    const wsId = logoTargetId
     e.target.value = ''
+    setLogoTargetId(null)
+    if (!file || !wsId || !isSupabaseConfigured || !isUuid(wsId)) return
+
+    setUploadingLogoFor(wsId)
+    try {
+      const url = await uploadAvatarImage(file, 'organizations', wsId)
+      const { error } = await supabase.from('organizations').update({ logo_url: url }).eq('id', wsId)
+      if (error) throw error
+      patchOrganization(wsId, { logoUrl: url })
+    } catch (err) {
+      console.warn('[ComHub] Échec de l\'envoi du logo', err)
+    } finally {
+      setUploadingLogoFor(null)
+    }
   }
 
   return (
@@ -95,8 +143,9 @@ export default function ProfilWorkspace() {
               <Avatar photoUrl={currentUser.avatarUrl} initials={currentUser.avatar} size="lg" />
               <button
                 onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
                 title="Changer la photo de profil"
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gold hover:bg-gold-light text-white flex items-center justify-center ring-2 ring-night-800 transition-colors"
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gold hover:bg-gold-light disabled:opacity-60 text-white flex items-center justify-center ring-2 ring-night-800 transition-colors"
               >
                 <Camera className="w-3.5 h-3.5" />
               </button>
@@ -114,6 +163,7 @@ export default function ProfilWorkspace() {
                 <RoleBadge role={activeWorkspace?.role} />
               </div>
               <p className="text-sm text-slate-400 truncate">{currentUser.email || currentUser.phone}</p>
+              {photoError && <p className="text-xs text-red-400 mt-1">{photoError}</p>}
               <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-gold/10 text-gold text-xs font-medium">
                 {currentUser.profession}
               </span>
@@ -169,6 +219,7 @@ export default function ProfilWorkspace() {
             const Icon = TYPE_ICON[ws.type] || Church
             const active = ws.id === activeWorkspace.id
             const canCreateAnnexe = ws.role === 'admin' && !ws.parentId
+            const canEditLogo = ws.role === 'admin' && isSupabaseConfigured && isUuid(ws.id)
             return (
               <div key={ws.id} className="border-t border-slate-800/60">
                 <button
@@ -177,8 +228,25 @@ export default function ProfilWorkspace() {
                     active ? 'bg-gold/5' : 'hover:bg-night-700/50'
                   }`}
                 >
-                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${ws.color} flex items-center justify-center shrink-0`}>
-                    <Icon className="w-4 h-4 text-white" />
+                  <div className="relative shrink-0">
+                    {ws.logoUrl ? (
+                      <img src={ws.logoUrl} alt="" className="w-9 h-9 rounded-xl object-cover" />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${ws.color} flex items-center justify-center`}>
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    {canEditLogo && (
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); setLogoTargetId(ws.id); logoInputRef.current?.click() }}
+                        title="Changer le logo"
+                        className="absolute -bottom-1 -right-1 rounded-full bg-gold hover:bg-gold-light text-white flex items-center justify-center ring-2 ring-night-800 transition-colors"
+                        style={{ width: 18, height: 18 }}
+                      >
+                        <Camera className="w-2.5 h-2.5" />
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-200 truncate">{ws.name}</p>
@@ -196,6 +264,9 @@ export default function ProfilWorkspace() {
                     Modifier le nom
                   </button>
                 )}
+                {uploadingLogoFor === ws.id && (
+                  <p className="px-4 pb-3 text-xs text-gold-light">Envoi du logo…</p>
+                )}
                 {canCreateAnnexe && (
                   <button
                     onClick={() => { setAnnexeParent(ws); setAnnexeCreated(null) }}
@@ -208,6 +279,13 @@ export default function ProfilWorkspace() {
               </div>
             )
           })}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoChange}
+            className="hidden"
+          />
           {annexeCreated && (
             <div className="px-4 py-3 border-t border-slate-800/60 bg-emerald-500/10">
               <p className="text-xs text-emerald-400">

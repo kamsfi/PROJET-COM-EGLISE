@@ -5,7 +5,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { isRealWorkspaceId } from '../data'
 
 export default function RenameOrgModal({ org, onClose }) {
-  const { renameOrganization } = useOrganizations()
+  const { patchOrganization } = useOrganizations()
   const [name, setName] = useState(org.name)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -27,7 +27,7 @@ export default function RenameOrgModal({ org, onClose }) {
       }
     }
 
-    renameOrganization(org.id, trimmed)
+    patchOrganization(org.id, { name: trimmed })
     onClose()
   }
 

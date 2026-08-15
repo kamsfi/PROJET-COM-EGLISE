@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Send, ArrowLeft, Circle, CheckCheck, Phone, Video, UserPlus, X } from 'lucide-react'
+import { Search, Send, ArrowLeft, Circle, CheckCheck, Phone, Video, UserPlus, X, Paperclip } from 'lucide-react'
 import { conversations, messagesByConversation, isUuid, getInitials, pickColor } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { useOrganizations } from '../context/OrganizationsContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { uploadAttachment } from '../lib/storage'
 import Avatar from './Avatar'
+import AttachmentPreview from './AttachmentPreview'
 import CallScreen from './CallScreen'
 
 // Heure pour un message du jour, date courte sinon.
@@ -87,7 +89,9 @@ export default function Discussions() {
   const [showPicker, setShowPicker] = useState(false)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState('')
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const scrollRef = useRef(null)
+  const attachmentInputRef = useRef(null)
 
   useEffect(() => {
     setActiveId(null)
@@ -189,7 +193,7 @@ export default function Discussions() {
     async function loadMessages() {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, sender_id, content, created_at')
+        .select('id, sender_id, content, attachment_path, attachment_name, attachment_type, created_at')
         .eq('conversation_id', activeId)
         .order('created_at', { ascending: true })
       if (cancelled) return
@@ -198,6 +202,7 @@ export default function Discussions() {
         id: row.id,
         sender: row.sender_id === currentUser.id ? 'me' : 'them',
         text: row.content,
+        attachment: row.attachment_path ? { path: row.attachment_path, name: row.attachment_name, type: row.attachment_type } : null,
         time: formatChatTime(row.created_at),
       }))
       setRealMessagesByConversation(prev => ({ ...prev, [activeId]: mapped }))
@@ -216,7 +221,13 @@ export default function Discussions() {
             ...prev,
             [activeId]: [
               ...(prev[activeId] || []),
-              { id: payload.new.id, sender: 'them', text: payload.new.content, time: formatChatTime(payload.new.created_at) },
+              {
+                id: payload.new.id, sender: 'them', text: payload.new.content,
+                attachment: payload.new.attachment_path
+                  ? { path: payload.new.attachment_path, name: payload.new.attachment_name, type: payload.new.attachment_type }
+                  : null,
+                time: formatChatTime(payload.new.created_at),
+              },
             ],
           }))
         }
@@ -277,6 +288,39 @@ export default function Discussions() {
       [activeId]: [...(prev[activeId] || []), newMsg],
     }))
     setInput('')
+  }
+
+  const handleAttachmentChange = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !activeId || !isSupabaseConfigured || !isUuid(activeId)) return
+
+    setSendError('')
+    setUploadingAttachment(true)
+    try {
+      const attachment = await uploadAttachment(file, 'conversations', activeId)
+      const caption = input.trim()
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({ conversation_id: activeId, sender_id: currentUser.id, content: caption || null, ...attachment })
+        .select('id, created_at')
+        .single()
+      if (error) throw error
+      setRealMessagesByConversation(prev => ({
+        ...prev,
+        [activeId]: [...(prev[activeId] || []), {
+          id: data.id, sender: 'me', text: caption || null,
+          attachment: { path: attachment.attachment_path, name: attachment.attachment_name, type: attachment.attachment_type },
+          time: formatChatTime(data.created_at),
+        }],
+      }))
+      setInput('')
+    } catch (err) {
+      console.warn('[ComHub] Échec de l\'envoi de la pièce jointe', err)
+      setSendError('Pièce jointe non envoyée. Réessayez.')
+    } finally {
+      setUploadingAttachment(false)
+    }
   }
 
   const handleStartConversation = async (member) => {
@@ -368,15 +412,22 @@ export default function Discussions() {
               className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'} animate-fade-in`}
             >
               <div className={`max-w-[75%] ${msg.sender === 'me' ? 'items-end' : 'items-start'} flex flex-col`}>
-                <div
-                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    msg.sender === 'me'
-                      ? 'bg-gold text-white rounded-br-sm'
-                      : 'bg-night-700 text-slate-100 rounded-bl-sm'
-                  }`}
-                >
-                  {msg.text}
-                </div>
+                {msg.attachment && (
+                  <div className="mb-1.5">
+                    <AttachmentPreview path={msg.attachment.path} name={msg.attachment.name} type={msg.attachment.type} />
+                  </div>
+                )}
+                {msg.text && (
+                  <div
+                    className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                      msg.sender === 'me'
+                        ? 'bg-gold text-white rounded-br-sm'
+                        : 'bg-night-700 text-slate-100 rounded-bl-sm'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                )}
                 <span className={`text-[10px] text-slate-500 mt-1 px-1 flex items-center gap-1`}>
                   {msg.time}
                   {msg.sender === 'me' && <CheckCheck className="w-3 h-3 text-sky-400" />}
@@ -390,6 +441,24 @@ export default function Discussions() {
         <div className="px-4 py-3 bg-night-800 border-t border-slate-800 pb-safe">
           {sendError && <p className="text-xs text-red-400 px-1 mb-2">{sendError}</p>}
           <div className="flex items-center gap-2">
+            {isSupabaseConfigured && isUuid(activeId) && (
+              <>
+                <button
+                  onClick={() => attachmentInputRef.current?.click()}
+                  disabled={uploadingAttachment}
+                  title="Joindre un fichier"
+                  className="w-10 h-10 rounded-full hover:bg-night-700 disabled:opacity-50 flex items-center justify-center text-slate-300 transition-colors shrink-0"
+                >
+                  <Paperclip className="w-[18px] h-[18px]" />
+                </button>
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  onChange={handleAttachmentChange}
+                  className="hidden"
+                />
+              </>
+            )}
             <input
               type="text"
               value={input}

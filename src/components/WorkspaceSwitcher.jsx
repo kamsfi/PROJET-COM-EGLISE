@@ -5,8 +5,19 @@ import { workspaceTypeLabels } from '../data'
 
 const TYPE_ICON = { church: Church, business: Building2, ngo: HeartHandshake }
 
-function WorkspaceRow({ ws, active, onSelect }) {
+function WorkspaceBadge({ ws, size = 'w-9 h-9', rounded = 'rounded-xl', iconSize = 'w-4 h-4' }) {
   const Icon = TYPE_ICON[ws.type] || Church
+  if (ws.logoUrl) {
+    return <img src={ws.logoUrl} alt="" className={`${size} ${rounded} object-cover shrink-0`} />
+  }
+  return (
+    <div className={`${size} ${rounded} bg-gradient-to-br ${ws.color} flex items-center justify-center shrink-0`}>
+      <Icon className={`${iconSize} text-white`} />
+    </div>
+  )
+}
+
+function WorkspaceRow({ ws, active, onSelect }) {
   return (
     <button
       onClick={() => onSelect(ws.id)}
@@ -14,9 +25,7 @@ function WorkspaceRow({ ws, active, onSelect }) {
         active ? 'bg-gold/10 ring-1 ring-gold/30' : 'hover:bg-night-700'
       }`}
     >
-      <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${ws.color} flex items-center justify-center shrink-0`}>
-        <Icon className="w-4 h-4 text-white" />
-      </div>
+      <WorkspaceBadge ws={ws} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-100 truncate">{ws.name}</p>
         <p className="text-xs text-slate-500">{workspaceTypeLabels[ws.type]} · {ws.membersCount} membres</p>
@@ -29,7 +38,6 @@ function WorkspaceRow({ ws, active, onSelect }) {
 export default function WorkspaceSwitcher({ variant = 'sidebar' }) {
   const { workspaces, activeWorkspace, setActiveWorkspaceId } = useWorkspace()
   const [open, setOpen] = useState(false)
-  const Icon = TYPE_ICON[activeWorkspace.type] || Church
   // Un seul espace : pas de sélecteur, juste un rappel simplifié et non cliquable.
   const isSingleWorkspace = workspaces.length <= 1
 
@@ -42,9 +50,7 @@ export default function WorkspaceSwitcher({ variant = 'sidebar' }) {
     if (isSingleWorkspace) {
       return (
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-night-700/60 text-slate-300">
-          <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${activeWorkspace.color} flex items-center justify-center shrink-0`}>
-            <Icon className="w-3 h-3 text-white" />
-          </div>
+          <WorkspaceBadge ws={activeWorkspace} size="w-5 h-5" rounded="rounded-md" iconSize="w-3 h-3" />
           <span className="text-xs font-medium max-w-[90px] truncate">{activeWorkspace.name}</span>
         </div>
       )
@@ -56,9 +62,7 @@ export default function WorkspaceSwitcher({ variant = 'sidebar' }) {
           onClick={() => setOpen(true)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-night-700 text-slate-200 transition-all active:scale-95"
         >
-          <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${activeWorkspace.color} flex items-center justify-center shrink-0`}>
-            <Icon className="w-3 h-3 text-white" />
-          </div>
+          <WorkspaceBadge ws={activeWorkspace} size="w-5 h-5" rounded="rounded-md" iconSize="w-3 h-3" />
           <span className="text-xs font-medium max-w-[90px] truncate">{activeWorkspace.name}</span>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         </button>
@@ -91,9 +95,7 @@ export default function WorkspaceSwitcher({ variant = 'sidebar' }) {
   if (isSingleWorkspace) {
     return (
       <div className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-night-700/60">
-        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${activeWorkspace.color} flex items-center justify-center shrink-0`}>
-          <Icon className="w-4 h-4 text-white" />
-        </div>
+        <WorkspaceBadge ws={activeWorkspace} size="w-8 h-8" rounded="rounded-lg" />
         <div className="flex-1 min-w-0 text-left">
           <p className="text-sm font-medium text-slate-100 truncate">{activeWorkspace.name}</p>
           <p className="text-[11px] text-slate-500">{workspaceTypeLabels[activeWorkspace.type]}</p>
@@ -108,9 +110,7 @@ export default function WorkspaceSwitcher({ variant = 'sidebar' }) {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-night-700 hover:bg-slate-700 transition-colors"
       >
-        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${activeWorkspace.color} flex items-center justify-center shrink-0`}>
-          <Icon className="w-4 h-4 text-white" />
-        </div>
+        <WorkspaceBadge ws={activeWorkspace} size="w-8 h-8" rounded="rounded-lg" />
         <div className="flex-1 min-w-0 text-left">
           <p className="text-sm font-medium text-slate-100 truncate">{activeWorkspace.name}</p>
           <p className="text-[11px] text-slate-500">{workspaceTypeLabels[activeWorkspace.type]}</p>

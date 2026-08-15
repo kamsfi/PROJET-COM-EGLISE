@@ -15,6 +15,7 @@ function mapRemoteOrg(dbOrg) {
     membersCount: 1,
     parentId: dbOrg.parent_id ?? null,
     joinCode: dbOrg.code_invitation,
+    logoUrl: dbOrg.logo_url ?? null,
   }
 }
 
@@ -79,10 +80,11 @@ export function OrganizationsProvider({ children }) {
     setDynamicMembers(prev => [...prev, member])
   }, [])
 
-  // Renomme localement une organisation déjà chargée (après une écriture
-  // Supabase réussie côté appelant) — ne touche que le cache frontend.
-  const renameOrganization = useCallback((id, name) => {
-    setDynamicOrgs(prev => prev.map(o => (o.id === id ? { ...o, name } : o)))
+  // Met à jour localement une organisation déjà chargée (après une écriture
+  // Supabase réussie côté appelant, ex: renommage ou nouveau logo) — ne
+  // touche que le cache frontend.
+  const patchOrganization = useCallback((id, patch) => {
+    setDynamicOrgs(prev => prev.map(o => (o.id === id ? { ...o, ...patch } : o)))
   }, [])
 
   // Fusionne des organisations réelles (Supabase) issues des memberships de
@@ -119,7 +121,7 @@ export function OrganizationsProvider({ children }) {
     createOrganization,
     createAnnexe,
     addMember,
-    renameOrganization,
+    patchOrganization,
     mergeRemoteOrganizations,
     mergeRemoteMembers,
   }

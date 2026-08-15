@@ -69,9 +69,13 @@ function GroupCard({ group, color, onOpen }) {
       className="bg-night-800 rounded-2xl border border-slate-800 hover:border-gold/40 p-4 text-left transition-colors animate-slide-up"
     >
       <div className="flex items-start gap-3 mb-3">
-        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shrink-0`}>
-          <UsersRound className="w-5 h-5 text-white" />
-        </div>
+        {group.photoUrl ? (
+          <img src={group.photoUrl} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" />
+        ) : (
+          <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shrink-0`}>
+            <UsersRound className="w-5 h-5 text-white" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-slate-100 text-sm truncate">{group.name}</h3>
           <p className="text-xs text-slate-500">{group.memberCount} membre{group.memberCount > 1 ? 's' : ''}</p>
@@ -134,7 +138,7 @@ export default function Groupes() {
     async function loadGroups() {
       const [{ data: groupRows, error: groupsErr }, { data: memberRows, error: membersErr }] = await Promise.all([
         supabase.from('groups')
-          .select('id, name, description, targeting_type, targeting_criteria, group_members(user_id, profiles(id, full_name, avatar_url, profession, skills))')
+          .select('id, name, description, photo_url, targeting_type, targeting_criteria, group_members(user_id, profiles(id, full_name, avatar_url, profession, skills))')
           .eq('organization_id', activeWorkspace.id),
         supabase.from('memberships')
           .select('user_id, role')
@@ -152,6 +156,7 @@ export default function Groupes() {
           workspaceId: activeWorkspace.id,
           name: row.name,
           description: row.description || '',
+          photoUrl: row.photo_url || null,
           memberCount: gm.length,
           memberIds: gm.map(x => x.user_id),
           rules: mapCriteriaToRules(row.targeting_type, row.targeting_criteria),
@@ -187,6 +192,22 @@ export default function Groupes() {
     loadGroups()
     return () => { cancelled = true }
   }, [activeWorkspace.id, mergeRemoteMembers])
+
+  // Reflète les adhésions réelles déjà en base dans `joinedGroupIds` (jamais
+  // peuplé au chargement sinon) — fusionne sans écraser les bascules faites
+  // dans cette même session. Sans ça, un membre déjà réel d'un groupe se
+  // reverrait proposer "Rejoindre" à chaque rechargement.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isRealWorkspaceId(activeWorkspace.id) || !currentUser?.id) return
+    const realIds = localGroups.filter(g => g.memberIds?.includes(currentUser.id)).map(g => g.id)
+    if (realIds.length === 0) return
+    setJoinedGroupIds(prev => {
+      const next = new Set(prev)
+      let changed = false
+      for (const id of realIds) { if (!next.has(id)) { next.add(id); changed = true } }
+      return changed ? next : prev
+    })
+  }, [localGroups, currentUser?.id, activeWorkspace.id])
 
   const canManage = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
 
@@ -242,6 +263,10 @@ export default function Groupes() {
     // Branche mock (inchangée)
     setLocalGroups(prev => prev.map(g => (g.id === groupId ? { ...g, name, description, rules } : g)))
     setEditingGroupId(null)
+  }
+
+  const handlePhotoUpdated = (groupId, photoUrl) => {
+    setLocalGroups(prev => prev.map(g => (g.id === groupId ? { ...g, photoUrl } : g)))
   }
 
   const selectedGroup = localGroups.find(g => g.id === selectedGroupId)
@@ -347,6 +372,7 @@ export default function Groupes() {
           onClose={() => { setSelectedGroupId(null); setJoinError('') }}
           canManage={canManage}
           onEdit={() => setEditingGroupId(selectedGroup.id)}
+          onPhotoUpdated={(url) => handlePhotoUpdated(selectedGroup.id, url)}
         />
       )}
 
