@@ -115,6 +115,9 @@ export default function Groupes() {
   const [createError, setCreateError] = useState('')
   const [creating, setCreating] = useState(false)
   const [joinError, setJoinError] = useState('')
+  const [editingGroupId, setEditingGroupId] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     setLocalGroups(groupsData.filter(g => g.workspaceId === activeWorkspace.id))
@@ -193,7 +196,7 @@ export default function Groupes() {
       setCreating(true)
       const { targeting_type, targeting_criteria } = deriveTargeting(rules)
       const { data, error } = await supabase.from('groups')
-        .insert({ organization_id: activeWorkspace.id, name, description: description || null, targeting_type, targeting_criteria })
+        .insert({ organization_id: activeWorkspace.id, created_by: currentUser.id, name, description: description || null, targeting_type, targeting_criteria })
         .select('id, name, description, targeting_type, targeting_criteria')
         .single()
       setCreating(false)
@@ -217,7 +220,32 @@ export default function Groupes() {
     setShowModal(false)
   }
 
+  const handleUpdate = async ({ name, description, rules }) => {
+    const groupId = editingGroupId
+    if (isSupabaseConfigured && isRealWorkspaceId(activeWorkspace.id)) {
+      setEditError('')
+      setEditing(true)
+      const { targeting_type, targeting_criteria } = deriveTargeting(rules)
+      const { error } = await supabase.from('groups')
+        .update({ name, description: description || null, targeting_type, targeting_criteria })
+        .eq('id', groupId)
+      setEditing(false)
+      if (error) {
+        console.warn('[ComHub] Échec de la modification du groupe Supabase', error)
+        setEditError('Impossible d\'enregistrer les modifications. Réessayez.')
+        return
+      }
+      setLocalGroups(prev => prev.map(g => (g.id === groupId ? { ...g, name, description: description || '', rules } : g)))
+      setEditingGroupId(null)
+      return
+    }
+    // Branche mock (inchangée)
+    setLocalGroups(prev => prev.map(g => (g.id === groupId ? { ...g, name, description, rules } : g)))
+    setEditingGroupId(null)
+  }
+
   const selectedGroup = localGroups.find(g => g.id === selectedGroupId)
+  const editingGroup = localGroups.find(g => g.id === editingGroupId)
   const selectedIndex = localGroups.findIndex(g => g.id === selectedGroupId)
   const selectedMembers = selectedGroup
     ? (selectedGroup.memberIds || []).map(id => members.find(m => m.id === id)).filter(Boolean)
@@ -317,6 +345,18 @@ export default function Groupes() {
           onToggleJoin={() => toggleJoin(selectedGroup.id)}
           joinError={joinError}
           onClose={() => { setSelectedGroupId(null); setJoinError('') }}
+          canManage={canManage}
+          onEdit={() => setEditingGroupId(selectedGroup.id)}
+        />
+      )}
+
+      {editingGroup && (
+        <GroupRulesModal
+          initialValues={{ name: editingGroup.name, description: editingGroup.description, rules: editingGroup.rules }}
+          onClose={() => { setEditingGroupId(null); setEditError('') }}
+          onCreate={handleUpdate}
+          submitting={editing}
+          error={editError}
         />
       )}
     </div>

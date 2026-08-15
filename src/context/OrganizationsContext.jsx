@@ -85,6 +85,12 @@ export function OrganizationsProvider({ children }) {
     setDynamicMembers(prev => [...prev, member])
   }, [])
 
+  // Renomme localement une organisation déjà chargée (après une écriture
+  // Supabase réussie côté appelant) — ne touche que le cache frontend.
+  const renameOrganization = useCallback((id, name) => {
+    setDynamicOrgs(prev => prev.map(o => (o.id === id ? { ...o, name } : o)))
+  }, [])
+
   // Fusionne des organisations réelles (Supabase) issues des memberships de
   // l'utilisateur connecté dans le même catalogue que le mock, par upsert
   // sur `id` — appelée à chaque changement de session (peut être invoquée
@@ -119,6 +125,7 @@ export function OrganizationsProvider({ children }) {
     createOrganization,
     createAnnexe,
     addMember,
+    renameOrganization,
     mergeRemoteOrganizations,
     mergeRemoteMembers,
   }

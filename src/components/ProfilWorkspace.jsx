@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import {
-  Calendar, Hand, Coins, ChevronRight, Plus, Camera,
+  Calendar, Hand, Coins, ChevronRight, Plus, Camera, Pencil,
   Phone, Cake, VenetianMask, Users2, Briefcase, Church, Building2, HeartHandshake,
 } from 'lucide-react'
 import { workspaceTypeLabels, maritalStatusLabels, genderLabels } from '../data'
@@ -9,6 +9,7 @@ import { useCurrentUser } from '../context/CurrentUserContext'
 import RoleBadge from './RoleBadge'
 import Avatar from './Avatar'
 import CreateAnnexeModal from './CreateAnnexeModal'
+import RenameOrgModal from './RenameOrgModal'
 
 const TYPE_ICON = { church: Church, business: Building2, ngo: HeartHandshake }
 
@@ -44,6 +45,7 @@ export default function ProfilWorkspace() {
   const { demoUsers, currentUserId, setCurrentUserId, currentUser, updateCurrentUser } = useCurrentUser()
   const [annexeParent, setAnnexeParent] = useState(null)
   const [annexeCreated, setAnnexeCreated] = useState(null)
+  const [renamingOrg, setRenamingOrg] = useState(null)
   const fileInputRef = useRef(null)
 
   const birthDateLabel = currentUser.birth_date
@@ -185,6 +187,15 @@ export default function ProfilWorkspace() {
                   <RoleBadge role={ws.role} size="xs" />
                   {active && <ChevronRight className="w-4 h-4 text-gold shrink-0" />}
                 </button>
+                {ws.role === 'admin' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setRenamingOrg(ws) }}
+                    className="w-full flex items-center gap-2 px-4 pb-3 text-xs text-slate-400 hover:text-gold-light transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    Modifier le nom
+                  </button>
+                )}
                 {canCreateAnnexe && (
                   <button
                     onClick={() => { setAnnexeParent(ws); setAnnexeCreated(null) }}
@@ -216,6 +227,13 @@ export default function ProfilWorkspace() {
           parentOrg={annexeParent}
           onClose={() => setAnnexeParent(null)}
           onCreated={(annexe) => { setAnnexeCreated(annexe); setAnnexeParent(null) }}
+        />
+      )}
+
+      {renamingOrg && (
+        <RenameOrgModal
+          org={renamingOrg}
+          onClose={() => setRenamingOrg(null)}
         />
       )}
     </div>

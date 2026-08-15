@@ -13,13 +13,14 @@ const MARITAL_OPTIONS = [
   { id: 'married', label: 'Marié(e)' },
 ]
 
-export default function GroupRulesModal({ onClose, onCreate, submitting = false, error = '' }) {
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [gender, setGender] = useState('all')
-  const [minAge, setMinAge] = useState('')
-  const [maxAge, setMaxAge] = useState('')
-  const [maritalStatus, setMaritalStatus] = useState('all')
+export default function GroupRulesModal({ onClose, onCreate, submitting = false, error = '', initialValues = null }) {
+  const isEdit = !!initialValues
+  const [name, setName] = useState(initialValues?.name || '')
+  const [description, setDescription] = useState(initialValues?.description || '')
+  const [gender, setGender] = useState(initialValues?.rules?.gender || 'all')
+  const [minAge, setMinAge] = useState(initialValues?.rules?.min_age ?? '')
+  const [maxAge, setMaxAge] = useState(initialValues?.rules?.max_age ?? '')
+  const [maritalStatus, setMaritalStatus] = useState(initialValues?.rules?.marital_status || 'all')
 
   const hasRules = gender !== 'all' || minAge || maxAge || maritalStatus !== 'all'
 
@@ -58,7 +59,7 @@ export default function GroupRulesModal({ onClose, onCreate, submitting = false,
             <UsersRound className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-100">Créer un groupe</h2>
+            <h2 className="text-lg font-bold text-slate-100">{isEdit ? 'Modifier le groupe' : 'Créer un groupe'}</h2>
             <p className="text-xs text-slate-400">Avec règles d'auto-assignation</p>
           </div>
         </div>
@@ -158,7 +159,9 @@ export default function GroupRulesModal({ onClose, onCreate, submitting = false,
             disabled={!name.trim() || submitting}
             className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
           >
-            {submitting ? 'Création…' : 'Créer le groupe'}
+            {isEdit
+              ? (submitting ? 'Enregistrement…' : 'Enregistrer les modifications')
+              : (submitting ? 'Création…' : 'Créer le groupe')}
           </button>
         </form>
       </div>

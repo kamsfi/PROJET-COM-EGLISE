@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, UsersRound, Sparkles, Phone, Video, Send, MessageCircle, Info, CheckCheck, Camera } from 'lucide-react'
+import { ArrowLeft, UsersRound, Sparkles, Phone, Video, Send, MessageCircle, Info, CheckCheck, Camera, Pencil } from 'lucide-react'
 import { ruleBadges } from './ruleBadges'
 import { messagesByGroup } from '../data'
 import { useCurrentUser } from '../context/CurrentUserContext'
@@ -8,7 +8,7 @@ import CallScreen from './CallScreen'
 import Avatar from './Avatar'
 import MemberProfileModal from './MemberProfileModal'
 
-export default function GroupDetailModal({ group, color, members, joined, onToggleJoin, joinError = '', onClose }) {
+export default function GroupDetailModal({ group, color, members, joined, onToggleJoin, joinError = '', onClose, canManage = false, onEdit }) {
   const { currentUser, updateCurrentUser } = useCurrentUser()
   const [tab, setTab] = useState('chat')
   const [messages, setMessages] = useState(() => messagesByGroup[group.id] || [])
@@ -63,6 +63,15 @@ export default function GroupDetailModal({ group, color, members, joined, onTogg
           <h2 className="font-semibold text-slate-100 truncate">{group.name}</h2>
           <p className="text-xs text-slate-500">{group.memberCount} membre{group.memberCount > 1 ? 's' : ''}</p>
         </div>
+        {canManage && (
+          <button
+            onClick={onEdit}
+            title="Modifier ce groupe"
+            className="p-2 rounded-full hover:bg-night-700 text-slate-300 transition-colors shrink-0"
+          >
+            <Pencil className="w-[18px] h-[18px]" />
+          </button>
+        )}
         {joined && (
           <div className="flex items-center gap-1 shrink-0">
             <button
