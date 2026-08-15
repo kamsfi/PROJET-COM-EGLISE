@@ -1,13 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { workspaces as baseWorkspaces, members as baseMembers, typeDefaultColor, ORG_TYPE_FROM_DB } from '../data'
+import { workspaces as baseWorkspaces, members as baseMembers, typeDefaultColor, ORG_TYPE_FROM_DB, generateJoinCode } from '../data'
 
 const OrganizationsContext = createContext(null)
-
-function generateJoinCode(type) {
-  const prefix = { church: 'EGL', business: 'ENT', ngo: 'ONG' }[type] || 'ORG'
-  const num = Math.floor(1000 + Math.random() * 9000)
-  return `${prefix}-${num}`
-}
 
 // Convertit une ligne `organizations` Supabase (réelle) au format frontend
 // attendu partout ailleurs (WorkspaceSwitcher, WorkspaceContext, etc.).

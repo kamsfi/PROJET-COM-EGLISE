@@ -1,15 +1,58 @@
 import { useState } from 'react'
 import { X, Building2, UserCog } from 'lucide-react'
 import { useOrganizations } from '../context/OrganizationsContext'
+import { useCurrentUser } from '../context/CurrentUserContext'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { isRealWorkspaceId, generateJoinCode, ORG_TYPE_TO_DB } from '../data'
 
 export default function CreateAnnexeModal({ parentOrg, onClose, onCreated }) {
-  const { createAnnexe } = useOrganizations()
+  const { createAnnexe, mergeRemoteOrganizations } = useOrganizations()
+  const { currentUser, addMembership } = useCurrentUser()
   const [name, setName] = useState('')
   const [leaderName, setLeaderName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!name.trim() || !leaderName.trim()) return
+    if (!name.trim() || !leaderName.trim() || submitting) return
+
+    if (isSupabaseConfigured && isRealWorkspaceId(parentOrg.id)) {
+      setSubmitting(true)
+      setError('')
+      const { data: orgRow, error: orgError } = await supabase.from('organizations')
+        .insert({
+          name: name.trim(),
+          type: ORG_TYPE_TO_DB[parentOrg.type] || 'eglise',
+          parent_id: parentOrg.id,
+          code_invitation: generateJoinCode(parentOrg.type),
+          created_by: currentUser.id,
+        })
+        .select('id, name, type, code_invitation, parent_id')
+        .single()
+      if (orgError) {
+        console.warn('[ComHub] Échec de la création de l\'annexe', orgError)
+        setSubmitting(false)
+        setError('Impossible de créer l\'annexe. Réessayez.')
+        return
+      }
+
+      const { error: membershipError } = await supabase.from('memberships')
+        .insert({ user_id: currentUser.id, organization_id: orgRow.id, role: 'admin' })
+      setSubmitting(false)
+      if (membershipError) {
+        console.warn('[ComHub] Échec du rattachement admin à l\'annexe', membershipError)
+        setError('Annexe créée, mais votre accès admin a échoué. Contactez le support.')
+        return
+      }
+
+      mergeRemoteOrganizations([orgRow])
+      addMembership(orgRow.id, 'admin')
+      onCreated?.({ id: orgRow.id, name: orgRow.name, leaderName: leaderName.trim() })
+      return
+    }
+
+    // Branche mock (inchangée)
     const annexe = createAnnexe({ parentId: parentOrg.id, name: name.trim(), leaderName: leaderName.trim() })
     onCreated?.(annexe)
   }
@@ -62,15 +105,17 @@ export default function CreateAnnexeModal({ parentOrg, onClose, onCreated }) {
           </div>
 
           <p className="text-[11px] text-slate-500 px-1">
-            Cette personne sera désignée administratrice de la nouvelle annexe. Les membres des deux organisations pourront se voir dans l'annuaire global et échanger via les canaux transversaux de la dénomination.
+            Vous serez désigné administrateur de la nouvelle annexe (vous pourrez y ajouter {leaderName.trim() || 'cette personne'} comme admin dès qu'elle aura un compte). Les membres des deux organisations pourront se voir dans l'annuaire global et échanger via les canaux transversaux de la dénomination.
           </p>
+
+          {error && <p className="text-xs text-red-400 px-1">{error}</p>}
 
           <button
             type="submit"
-            disabled={!name.trim() || !leaderName.trim()}
+            disabled={!name.trim() || !leaderName.trim() || submitting}
             className="w-full bg-gold hover:bg-gold-light disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] mt-2"
           >
-            Créer l'annexe
+            {submitting ? 'Création…' : 'Créer l\'annexe'}
           </button>
         </form>
       </div>

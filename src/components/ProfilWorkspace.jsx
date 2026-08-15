@@ -211,7 +211,7 @@ export default function ProfilWorkspace() {
           {annexeCreated && (
             <div className="px-4 py-3 border-t border-slate-800/60 bg-emerald-500/10">
               <p className="text-xs text-emerald-400">
-                « {annexeCreated.name} » créée · {annexeCreated.leaderName} en est désormais administrateur.
+                « {annexeCreated.name} » créée · vous en êtes administrateur. Pensez à y ajouter {annexeCreated.leaderName} une fois son compte créé.
               </p>
             </div>
           )}

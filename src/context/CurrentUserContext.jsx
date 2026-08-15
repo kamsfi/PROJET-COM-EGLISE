@@ -132,6 +132,12 @@ export function CurrentUserProvider({ children }) {
     setUsers(prev => prev.map(u => u.id === currentUserId ? { ...u, ...patch } : u))
   }, [sessionProfile, currentUserId])
 
+  // Reflète localement une nouvelle adhésion réelle (ex: après la création
+  // d'une annexe) sans attendre un rechargement complet de session.
+  const addMembership = useCallback((workspaceId, role) => {
+    setSessionProfile(prev => (prev ? { ...prev, memberships: [...prev.memberships, { workspaceId, role }] } : prev))
+  }, [])
+
   const value = {
     demoUsers: users,
     currentUserId,
@@ -144,6 +150,7 @@ export function CurrentUserProvider({ children }) {
     findUserByIdentifier,
     registerUser,
     updateCurrentUser,
+    addMembership,
   }
 
   return (

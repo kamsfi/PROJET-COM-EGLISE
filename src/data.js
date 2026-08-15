@@ -9,6 +9,7 @@ export function getInitials(name) {
 // Nommage anglais/camelCase côté front (church/business/ngo) vs français
 // côté Supabase (organization_type: eglise/entreprise/ong).
 export const ORG_TYPE_FROM_DB = { eglise: 'church', entreprise: 'business', ong: 'ngo' }
+export const ORG_TYPE_TO_DB = { church: 'eglise', business: 'entreprise', ngo: 'ong' }
 
 // Distingue un id d'organisation réel (uuid Supabase) d'un id mock
 // ('w1', 'w1b'...) — utilisé par tout composant qui ne doit interroger
@@ -20,6 +21,12 @@ export function isUuid(id) {
 }
 export function isRealWorkspaceId(id) {
   return isUuid(id)
+}
+
+export function generateJoinCode(type) {
+  const prefix = { church: 'EGL', business: 'ENT', ngo: 'ONG' }[type] || 'ORG'
+  const num = Math.floor(1000 + Math.random() * 9000)
+  return `${prefix}-${num}`
 }
 
 const AVATAR_COLORS = [
