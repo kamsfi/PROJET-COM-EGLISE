@@ -11,6 +11,7 @@ import Finances from './components/Finances'
 import ProfilWorkspace from './components/ProfilWorkspace'
 import RoleBadge from './components/RoleBadge'
 import AuthModal from './components/AuthModal'
+import LandingPage from './components/LandingPage'
 import NoWorkspaceScreen from './components/NoWorkspaceScreen'
 import WorkspaceSwitcher from './components/WorkspaceSwitcher'
 import Avatar from './components/Avatar'
@@ -40,6 +41,8 @@ function AppShell() {
   const { activeWorkspace } = useWorkspace()
   const notifications = useNotifications()
   const [activeTab, setActiveTab] = useState('discussions')
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
   const ActiveComponent = TABS.find(t => t.id === activeTab).component
 
   if (sessionLoading) {
@@ -52,9 +55,15 @@ function AppShell() {
 
   if (!isAuthenticated) {
     return (
-      <div className="h-screen w-screen bg-night-900">
-        <AuthModal />
-      </div>
+      <>
+        <LandingPage
+          onLogin={() => { setAuthMode('login'); setAuthOpen(true) }}
+          onSignup={() => { setAuthMode('signup'); setAuthOpen(true) }}
+        />
+        {authOpen && (
+          <AuthModal initialMode={authMode} onClose={() => setAuthOpen(false)} />
+        )}
+      </>
     )
   }
 

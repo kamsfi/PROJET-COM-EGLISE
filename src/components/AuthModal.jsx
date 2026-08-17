@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Mail, Lock, Layers, Eye, EyeOff, Sparkles, ChevronLeft, Check } from 'lucide-react'
+import { Mail, Lock, Layers, Eye, EyeOff, Sparkles, ChevronLeft, Check, X } from 'lucide-react'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import SignupWizard, { PENDING_JOIN_STORAGE_KEY, PENDING_CREATE_ORG_STORAGE_KEY, createRealOrganization } from './SignupWizard'
@@ -261,14 +261,22 @@ function LoginPanel({ onSwitchToSignup }) {
   )
 }
 
-export default function AuthModal() {
-  const [mode, setMode] = useState('login')
+export default function AuthModal({ initialMode = 'login', onClose }) {
+  const [mode, setMode] = useState(initialMode)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative w-full sm:max-w-sm bg-night-800 border border-slate-800 rounded-t-3xl sm:rounded-3xl p-6 pb-safe animate-slide-up shadow-2xl max-h-[92vh] overflow-y-auto">
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-700 text-slate-400 transition-colors z-10"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
         {mode === 'login' ? (
           <LoginPanel onSwitchToSignup={() => setMode('signup')} />
         ) : (
