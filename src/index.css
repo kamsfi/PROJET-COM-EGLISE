@@ -2,6 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   THÈME CLAIR/SOMBRE — variables CSS (canaux RGB "r g b", sans
+   `rgb()`, pour rester compatibles avec le modificateur d'opacité
+   Tailwind `rgb(var(--x) / <alpha-value>)`).
+
+   Sombre = valeurs historiques de l'app (inchangées à l'œil).
+   Clair  = nouvelle palette, dérivée en inversant le rôle des
+   paliers (paliers bas = texte/fond clair en sombre devient
+   texte/fond foncé en clair, et inversement pour les paliers hauts
+   utilisés comme bordures/fonds secondaires).
+
+   `:root` sert de valeur par défaut AVANT que le JS n'ait choisi
+   (voir main.jsx) — délibérément identique au thème sombre pour ne
+   rien changer à l'expérience existante tant que personne n'a
+   activé le thème clair.
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+  --night-900: 2 6 23;
+  --night-800: 15 23 42;
+  --night-700: 30 41 59;
+  --night-600: 51 65 85;
+
+  --slate-50: 248 250 252;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+  --slate-700: 51 65 85;
+  --slate-800: 30 41 59;
+  --slate-900: 15 23 42;
+  --slate-950: 2 6 23;
+
+  --gold: 217 119 6;
+  --gold-light: 245 158 11;
+  --gold-dark: 180 83 9;
+}
+
+[data-theme="light"] {
+  --night-900: 248 250 252;
+  --night-800: 255 255 255;
+  --night-700: 241 245 249;
+  --night-600: 226 232 240;
+
+  --slate-50: 15 23 42;
+  --slate-100: 15 23 42;
+  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;
+  --slate-400: 100 116 139;
+  --slate-500: 100 116 139;
+  --slate-600: 148 163 184;
+  --slate-700: 203 213 225;
+  --slate-800: 226 232 240;
+  --slate-900: 241 245 249;
+  --slate-950: 248 250 252;
+
+  /* Le doré reste la même couleur de marque dans les deux thèmes. */
+  --gold: 217 119 6;
+  --gold-light: 245 158 11;
+  --gold-dark: 180 83 9;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }

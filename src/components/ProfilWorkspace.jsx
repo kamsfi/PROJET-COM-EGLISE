@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import {
-  Calendar, Hand, Coins, ChevronRight, Plus, Camera, Pencil,
+  Calendar, Hand, Coins, ChevronRight, Plus, Camera, Pencil, Moon, Sun,
   Phone, Cake, VenetianMask, Users2, Briefcase, Church, Building2, HeartHandshake,
 } from 'lucide-react'
 import { workspaceTypeLabels, maritalStatusLabels, genderLabels, isUuid } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useOrganizations } from '../context/OrganizationsContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
+import { useTheme } from '../context/ThemeContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { uploadAvatarImage } from '../lib/storage'
 import RoleBadge from './RoleBadge'
@@ -47,6 +48,7 @@ export default function ProfilWorkspace() {
   const { workspaces, activeWorkspace, setActiveWorkspaceId } = useWorkspace()
   const { patchOrganization } = useOrganizations()
   const { demoUsers, currentUserId, setCurrentUserId, currentUser, updateCurrentUser } = useCurrentUser()
+  const { theme, setTheme } = useTheme()
   const [annexeParent, setAnnexeParent] = useState(null)
   const [annexeCreated, setAnnexeCreated] = useState(null)
   const [renamingOrg, setRenamingOrg] = useState(null)
@@ -198,6 +200,31 @@ export default function ProfilWorkspace() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Apparence */}
+        <div className="bg-night-800 rounded-2xl border border-slate-800 p-4 animate-slide-up">
+          <h3 className="font-semibold text-slate-100 mb-3">Apparence</h3>
+          <div className="flex bg-night-700 rounded-xl p-1">
+            <button
+              onClick={() => setTheme('light')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                theme === 'light' ? 'bg-gold text-white shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sun className="w-3.5 h-3.5" />
+              Clair
+            </button>
+            <button
+              onClick={() => setTheme('dark')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                theme === 'dark' ? 'bg-gold text-white shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5" />
+              Sombre
+            </button>
+          </div>
         </div>
 
         {/* Stats */}

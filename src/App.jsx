@@ -19,6 +19,7 @@ import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext'
 import { CurrentUserProvider, useCurrentUser } from './context/CurrentUserContext'
 import { OrganizationsProvider } from './context/OrganizationsContext'
 import { NotificationsProvider, useNotifications } from './context/NotificationsContext'
+import { ThemeProvider } from './context/ThemeContext'
 
 const TABS = [
   { id: 'discussions', label: 'Discussions', icon: MessageCircle, component: Discussions },
@@ -43,7 +44,7 @@ function AppShell() {
 
   if (sessionLoading) {
     return (
-      <div className="h-screen w-screen bg-night-900 flex items-center justify-center" style={{ backgroundColor: '#020617' }}>
+      <div className="h-screen w-screen bg-night-900 flex items-center justify-center">
         <Layers className="w-8 h-8 text-gold animate-pulse" />
       </div>
     )
@@ -51,7 +52,7 @@ function AppShell() {
 
   if (!isAuthenticated) {
     return (
-      <div className="h-screen w-screen bg-night-900" style={{ backgroundColor: '#020617' }}>
+      <div className="h-screen w-screen bg-night-900">
         <AuthModal />
       </div>
     )
@@ -59,14 +60,14 @@ function AppShell() {
 
   if (!activeWorkspace) {
     return (
-      <div className="h-screen w-screen bg-night-900" style={{ backgroundColor: '#020617' }}>
+      <div className="h-screen w-screen bg-night-900">
         <NoWorkspaceScreen />
       </div>
     )
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-night-900 flex" style={{ backgroundColor: '#020617' }}>
+    <div className="h-screen w-screen overflow-hidden bg-night-900 flex">
       {/* Sidebar - Desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-night-800 border-r border-slate-800 shrink-0">
         {/* Logo */}
@@ -188,14 +189,16 @@ function AppShell() {
 
 export default function App() {
   return (
-    <OrganizationsProvider>
-      <CurrentUserProvider>
-        <NotificationsProvider>
-          <WorkspaceProvider>
-            <AppShell />
-          </WorkspaceProvider>
-        </NotificationsProvider>
-      </CurrentUserProvider>
-    </OrganizationsProvider>
+    <ThemeProvider>
+      <OrganizationsProvider>
+        <CurrentUserProvider>
+          <NotificationsProvider>
+            <WorkspaceProvider>
+              <AppShell />
+            </WorkspaceProvider>
+          </NotificationsProvider>
+        </CurrentUserProvider>
+      </OrganizationsProvider>
+    </ThemeProvider>
   )
 }

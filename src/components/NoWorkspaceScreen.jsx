@@ -29,7 +29,7 @@ export default function NoWorkspaceScreen() {
   }
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center px-4" style={{ backgroundColor: '#020617' }}>
+    <div className="h-screen w-screen bg-night-900 flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-night-800 border border-slate-800 rounded-3xl p-6 shadow-2xl">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center mb-3">
