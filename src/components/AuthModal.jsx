@@ -227,32 +227,36 @@ function LoginPanel({ onSwitchToSignup }) {
         </button>
       </form>
 
-      <div className="flex items-center gap-2 my-5">
-        <div className="flex-1 h-px bg-slate-800" />
-        <span className="text-[11px] text-slate-500">Accès Démo Rapide</span>
-        <div className="flex-1 h-px bg-slate-800" />
-      </div>
+      {!isSupabaseConfigured && (
+        <>
+          <div className="flex items-center gap-2 my-5">
+            <div className="flex-1 h-px bg-slate-800" />
+            <span className="text-[11px] text-slate-500">Accès Démo Rapide</span>
+            <div className="flex-1 h-px bg-slate-800" />
+          </div>
 
-      <div className="space-y-2">
-        {demoUsers.filter(u => ['daniel', 'jean'].includes(u.id)).map(u => (
-          <button
-            key={u.id}
-            onClick={() => login(u.id)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-night-700 hover:bg-slate-700 transition-all active:scale-[0.98] text-left"
-          >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-orange-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
-              {u.avatar}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-200 truncate">{u.full_name}</p>
-              <p className="text-[11px] text-slate-500">
-                {u.memberships.length > 1 ? `Multi-espaces · ${u.memberships.length} organisations` : 'Église uniquement'}
-              </p>
-            </div>
-            <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
-          </button>
-        ))}
-      </div>
+          <div className="space-y-2">
+            {demoUsers.filter(u => ['daniel', 'jean'].includes(u.id)).map(u => (
+              <button
+                key={u.id}
+                onClick={() => login(u.id)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-night-700 hover:bg-slate-700 transition-all active:scale-[0.98] text-left"
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-orange-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+                  {u.avatar}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200 truncate">{u.full_name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {u.memberships.length > 1 ? `Multi-espaces · ${u.memberships.length} organisations` : 'Église uniquement'}
+                  </p>
+                </div>
+                <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <p className="text-center text-xs text-slate-500 mt-5">
         Pas encore de compte ? <button onClick={onSwitchToSignup} className="text-gold-light hover:text-gold font-medium">S'inscrire</button>
@@ -265,18 +269,26 @@ export default function AuthModal({ initialMode = 'login', onClose }) {
   const [mode, setMode] = useState(initialMode)
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full sm:max-w-sm bg-night-800 border border-slate-800 rounded-t-3xl sm:rounded-3xl p-6 pb-safe animate-slide-up shadow-2xl max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[60] bg-night-900 overflow-y-auto animate-fade-in">
+      <div className="flex items-center justify-between px-5 py-4 max-w-lg mx-auto">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
+            <Layers className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-slate-100">ComHub</span>
+        </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-700 text-slate-400 transition-colors z-10"
+            className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-100 px-3 py-1.5 rounded-lg hover:bg-night-800 transition-colors"
           >
             <X className="w-4 h-4" />
+            Retour
           </button>
         )}
+      </div>
+
+      <div className="max-w-sm mx-auto px-6 pb-safe pb-10 pt-4 sm:pt-10">
         {mode === 'login' ? (
           <LoginPanel onSwitchToSignup={() => setMode('signup')} />
         ) : (
