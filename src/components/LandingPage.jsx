@@ -1,254 +1,204 @@
-import { useState } from 'react'
 import {
-  Layers, MessageCircle, Radio, Calendar, Library, Users, UsersRound, Wallet, Heart,
-  ArrowRight, Sparkles, ShieldCheck, Zap, Church, Building2, HeartHandshake,
-  ChevronRight, Plus, Search,
+  Layers, MessageSquare, Radio, Users, UsersRound, Calendar, Library, Wallet, Heart,
+  ShieldCheck, Zap, BrainCircuit, ArrowRight,
 } from 'lucide-react'
 
 const FEATURES = [
-  { icon: MessageCircle, label: 'Discussions', text: 'Messagerie privée en temps réel, pièces jointes incluses.' },
-  { icon: Radio, label: 'Canaux', text: 'Annonces officielles diffusées à toute l\'organisation.' },
-  { icon: UsersRound, label: 'Groupes', text: 'Communautés à critères — âge, sexe — réellement confidentielles.' },
-  { icon: Calendar, label: 'Événements', text: 'Planification et inscriptions pour vos rencontres.' },
-  { icon: Library, label: 'Médiathèque', text: 'Prédications, photos et vidéos centralisées.' },
-  { icon: Users, label: 'Annuaire', text: 'Retrouvez chaque membre de votre organisation.' },
-  { icon: Wallet, label: 'Finances', text: 'Dons et cotisations, Mobile Money ou virement.' },
-  { icon: Heart, label: 'Direct & Prières', text: 'Mur de prière et demandes d\'accompagnement.' },
+  { icon: MessageSquare, label: 'Discussions', text: 'Des conversations fluides et privées pour chaque équipe, département ou projet.', tint: 'bg-orange-100 text-orange-600' },
+  { icon: Radio, label: 'Canaux', text: 'Diffusez des annonces importantes et gardez toute votre communauté informée en temps réel.', tint: 'bg-amber-100 text-amber-600' },
+  { icon: UsersRound, label: 'Groupes', text: 'Communautés à critères réellement confidentielles — âge, sexe, statut.', tint: 'bg-orange-100 text-orange-600' },
+  { icon: Calendar, label: 'Événements', text: 'Planifiez, coordonnez et publiez vos réunions et rassemblements avec facilité.', tint: 'bg-amber-100 text-amber-600' },
+  { icon: Library, label: 'Médiathèque', text: 'Prédications, photos et vidéos centralisées pour toute l\'organisation.', tint: 'bg-orange-100 text-orange-600' },
+  { icon: Users, label: 'Annuaire', text: 'Retrouvez et contactez chaque membre de votre organisation.', tint: 'bg-amber-100 text-amber-600' },
+  { icon: Wallet, label: 'Finances', text: 'Dons et cotisations, par Mobile Money ou virement bancaire.', tint: 'bg-orange-100 text-orange-600' },
+  { icon: Heart, label: 'Direct & Prières', text: 'Mur de prière et demandes d\'accompagnement de la communauté.', tint: 'bg-amber-100 text-amber-600' },
 ]
-
-const TYPE_ICON = { church: Church, business: Building2, ngo: HeartHandshake }
-
-const MOCK_ORGS = [
-  { id: 'church', label: 'CAP Rocher', icon: 'church' },
-  { id: 'business', label: 'Entreprise', icon: 'business' },
-]
-
-const MOCK_NAV = ['Discussions', 'Groupes', 'Événements', 'Finances']
-
-function ProductPreview() {
-  const [activeOrg, setActiveOrg] = useState('church')
-  const [activeNav, setActiveNav] = useState('Discussions')
-
-  return (
-    <div className="relative rounded-2xl p-2 bg-gradient-to-b from-slate-700/30 via-slate-800/10 to-transparent border border-slate-700/50 shadow-2xl">
-      <div className="w-full bg-night-900 rounded-xl border border-slate-800 overflow-hidden flex h-[440px] text-left">
-        {/* Sidebar */}
-        <div className="w-48 bg-night-800 border-r border-slate-800 flex flex-col p-3 shrink-0">
-          <div className="bg-night-700 border border-slate-800 rounded-xl p-2 mb-3">
-            <div className="flex gap-1.5">
-              {MOCK_ORGS.map(o => {
-                const Icon = TYPE_ICON[o.icon]
-                return (
-                  <button
-                    key={o.id}
-                    onClick={() => setActiveOrg(o.id)}
-                    className={`flex-1 min-w-0 flex items-center gap-1 text-[11px] p-1.5 rounded-lg font-medium transition-all ${
-                      activeOrg === o.id ? 'bg-night-800 text-slate-100 border border-slate-700' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <Icon className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{o.label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div className="space-y-1">
-            {MOCK_NAV.map(label => {
-              const Icon = FEATURES.find(f => f.label === label).icon
-              const active = activeNav === label
-              return (
-                <button
-                  key={label}
-                  onClick={() => setActiveNav(label)}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
-                    active ? 'bg-gold text-white shadow' : 'text-slate-400 hover:bg-night-700 hover:text-slate-200'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 flex flex-col bg-night-900">
-          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">{activeNav}</h3>
-              <p className="text-[11px] text-slate-500">{activeOrg === 'church' ? 'CAP Rocher de David' : 'Mon Entreprise'}</p>
-            </div>
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-white px-2.5 py-1.5 rounded-lg bg-gold">
-              <Plus className="w-3 h-3" />
-              Nouveau
-            </span>
-          </div>
-          <div className="p-3 border-b border-slate-800/60 shrink-0">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-              <div className="w-full bg-night-800 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-500">
-                Rechercher…
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 p-4 space-y-3 overflow-hidden">
-            <div className="flex gap-2.5 items-start">
-              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">JM</div>
-              <div className="bg-night-800 border border-slate-800 px-3 py-2 rounded-xl rounded-tl-none text-xs text-slate-300 max-w-[75%]">
-                Les inscriptions pour dimanche sont ouvertes 🙏
-              </div>
-            </div>
-            <div className="flex gap-2.5 items-start justify-end">
-              <div className="bg-gold px-3 py-2 rounded-xl rounded-tr-none text-xs text-white max-w-[75%]">
-                Parfait, je relaie l'info au groupe.
-              </div>
-            </div>
-            <div className="bg-night-800 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-gold/10 text-gold flex items-center justify-center shrink-0">
-                  <Calendar className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-200">Culte de dimanche</p>
-                  <p className="text-[10px] text-slate-500">10h00 · Salle principale</p>
-                </div>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export default function LandingPage({ onLogin, onSignup }) {
   return (
-    <div className="min-h-screen bg-night-900 text-slate-100 overflow-y-auto">
-      {/* Halo */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-b from-gold/10 to-transparent blur-[110px] pointer-events-none" />
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased selection:bg-orange-500 selection:text-white">
 
-      <nav className="relative max-w-6xl mx-auto px-6 py-5 flex items-center justify-between border-b border-slate-800">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
-            <Layers className="w-4.5 h-4.5 text-white" />
-          </div>
-          <div>
-            <p className="font-bold text-slate-100 leading-tight">ComHub</p>
-            <p className="text-[11px] text-slate-500 leading-tight">Plateforme Multi-Organisations</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onLogin}
-            className="text-sm font-medium text-slate-300 hover:text-white px-3 sm:px-4 py-2 transition-colors"
-          >
-            Connexion
-          </button>
-          <button
-            onClick={onSignup}
-            className="text-sm font-semibold text-white px-3 sm:px-4 py-2 rounded-lg bg-gold hover:bg-gold-light shadow-md transition-all"
-          >
-            Créer un espace
-          </button>
-        </div>
-      </nav>
+      {/* ================= HEADER / NAVBAR ================= */}
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-100">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
 
-      <main className="relative max-w-6xl mx-auto px-6 pt-14 pb-20">
-        <div className="grid lg:grid-cols-12 gap-10 items-center">
-          <div className="lg:col-span-5 space-y-6 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gold/10 text-gold border border-gold/20">
-              <Sparkles className="w-3.5 h-3.5" />
-              Une plateforme, toutes vos communautés
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center text-white shadow-md shadow-slate-900/10">
+              <Layers className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <span className="font-bold text-xl tracking-tight text-slate-900">ComHub</span>
+              <span className="block text-[10px] text-slate-500 font-medium tracking-wide uppercase">Plateforme Multi-Organisations</span>
+            </div>
+          </div>
+
+          {/* Navigation & CTA */}
+          <div className="flex items-center gap-4">
+            <button onClick={onLogin} className="text-sm font-semibold text-slate-600 hover:text-slate-900 px-4 py-2 transition-colors">
+              Connexion
+            </button>
+            <button onClick={onSignup} className="text-sm font-semibold bg-[#0F172A] hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl shadow-sm transition-all duration-200">
+              Créer un espace
+            </button>
+          </div>
+
+        </div>
+      </header>
+
+      {/* ================= HERO SECTION ================= */}
+      <section className="relative pt-16 pb-24 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid lg:grid-cols-12 gap-12 items-center">
+
+            {/* Left Content */}
+            <div className="lg:col-span-6 space-y-8 text-center lg:text-left">
+
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-100 text-orange-700 text-xs font-semibold">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Plateforme de collaboration tout-en-un</span>
+              </div>
+
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
+                Unifiez vos équipes et vos communautés, <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-amber-600">sans effort.</span>
+              </h1>
+
+              <p className="text-lg text-slate-600 leading-relaxed max-w-xl mx-auto lg:mx-0">
+                ComHub centralise messagerie, groupes, événements, médiathèque et finances pour les églises, entreprises et ONG. Chaque organisation dans son propre espace, entièrement cloisonné.
+              </p>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+                <button onClick={onSignup} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-semibold px-8 py-4 rounded-xl shadow-lg shadow-orange-600/20 transition-all duration-200">
+                  Créer mon espace — C'est gratuit
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <a href="#modules" className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold px-6 py-4 rounded-xl transition-all duration-200">
+                  Voir les modules
+                </a>
+              </div>
+
+              {/* Feature Badges */}
+              <div className="pt-6 border-t border-slate-200 grid grid-cols-3 gap-4 max-w-lg mx-auto lg:mx-0">
+                <div className="flex flex-col items-center lg:items-start">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-semibold text-sm">
+                    <ShieldCheck className="w-4 h-4 text-orange-600" />
+                    Cloisonné
+                  </div>
+                  <span className="text-xs text-slate-500 mt-0.5">Espaces privés</span>
+                </div>
+                <div className="flex flex-col items-center lg:items-start">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-semibold text-sm">
+                    <Zap className="w-4 h-4 text-orange-600" />
+                    Temps réel
+                  </div>
+                  <span className="text-xs text-slate-500 mt-0.5">Messagerie instantanée</span>
+                </div>
+                <div className="flex flex-col items-center lg:items-start">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-semibold text-sm">
+                    <BrainCircuit className="w-4 h-4 text-orange-600" />
+                    IA intégrée
+                  </div>
+                  <span className="text-xs text-slate-500 mt-0.5">Résumés intelligents</span>
+                </div>
+              </div>
+
             </div>
 
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-100 tracking-tight leading-[1.1]">
-              Unifiez vos équipes et vos <span className="text-gold">communautés</span>.
-            </h1>
+            {/* Right Illustration / App Mockup Preview */}
+            <div className="lg:col-span-6 relative">
+              <div className="relative mx-auto max-w-lg lg:max-w-none">
+                {/* Decorative background blur */}
+                <div className="absolute -inset-1.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl blur-xl opacity-20 animate-pulse" />
 
-            <p className="text-base sm:text-lg text-slate-400 leading-relaxed max-w-xl mx-auto lg:mx-0">
-              ComHub centralise messagerie, groupes, événements, médiathèque et finances pour les églises, entreprises et ONG — chaque organisation dans son propre espace, entièrement cloisonné.
+                {/* Mockup Card Container */}
+                <div className="relative bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-rose-400" />
+                      <div className="w-3 h-3 rounded-full bg-amber-400" />
+                      <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                    </div>
+                    <span className="text-xs font-medium text-slate-400">ComHub Workspace</span>
+                  </div>
+
+                  {/* Mockup Inner UI Preview */}
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-xs">CAP</div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Discussions Générales</p>
+                          <p className="text-[10px] text-slate-500">3 nouveaux messages</p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-orange-600 font-semibold bg-orange-50 px-2 py-1 rounded">Actif</span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-orange-500">
+                      <p className="text-xs text-slate-700 font-medium">"Les inscriptions pour le séminaire de leadership sont ouvertes !"</p>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Il y a 5 minutes • Par Secrétariat</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ================= FEATURES SECTION ================= */}
+      <section id="modules" className="py-20 bg-white border-t border-slate-100">
+        <div className="max-w-7xl mx-auto px-6">
+
+          <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+              Tout ce qu'il faut pour votre succès
+            </h2>
+            <p className="text-slate-600">
+              Huit modules puissants, une seule plateforme unifiée pour piloter votre organisation.
             </p>
-
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-1 justify-center lg:justify-start">
-              <button
-                onClick={onSignup}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gold hover:bg-gold-light text-white font-semibold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
-              >
-                <span>Créer mon espace</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onLogin}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-night-800 hover:bg-night-700 text-slate-300 font-semibold border border-slate-800 transition-all"
-              >
-                J'ai déjà un compte
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-800 text-left">
-              <div>
-                <div className="flex items-center gap-1.5 text-slate-100 font-bold text-base">
-                  <ShieldCheck className="w-4 h-4 text-slate-500" /> Cloisonné
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Groupes et espaces réellement privés</p>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 text-slate-100 font-bold text-base">
-                  <Zap className="w-4 h-4 text-slate-500" /> Temps réel
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Messagerie instantanée</p>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 text-slate-100 font-bold text-base">
-                  <Sparkles className="w-4 h-4 text-slate-500" /> IA intégrée
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Résumés de discussions manquées</p>
-              </div>
-            </div>
           </div>
 
-          <div className="lg:col-span-7">
-            <ProductPreview />
-          </div>
-        </div>
-
-        {/* Features */}
-        <div className="mt-24">
-          <h2 className="text-2xl font-bold text-slate-100 text-center mb-2">Tout ce qu'il faut à votre organisation</h2>
-          <p className="text-slate-400 text-center mb-10">Huit modules, une seule plateforme.</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map(f => (
-              <div key={f.label} className="bg-night-800 border border-slate-800 rounded-2xl p-5">
-                <div className="w-10 h-10 rounded-xl bg-gold/10 text-gold flex items-center justify-center mb-3">
-                  <f.icon className="w-5 h-5" />
+              <div key={f.label} className="group bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 p-8 rounded-2xl border border-slate-100">
+                <div className={`w-12 h-12 rounded-xl ${f.tint} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+                  <f.icon className="w-6 h-6" />
                 </div>
-                <h3 className="font-semibold text-slate-100 text-sm mb-1">{f.label}</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">{f.text}</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{f.label}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{f.text}</p>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Closing CTA */}
-        <div className="mt-24 bg-gradient-to-br from-gold/10 to-transparent border border-gold/20 rounded-3xl p-10 text-center">
-          <h2 className="text-2xl font-bold text-slate-100 mb-2">Prêt à unifier votre communauté ?</h2>
-          <p className="text-slate-400 mb-6 max-w-lg mx-auto">Église, entreprise ou ONG — créez votre espace en quelques minutes, gratuitement.</p>
-          <button
-            onClick={onSignup}
-            className="px-6 py-3.5 rounded-xl bg-gold hover:bg-gold-light text-white font-semibold inline-flex items-center gap-2 shadow-lg transition-all active:scale-95"
-          >
-            <span>Créer mon espace</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
-      </main>
+      </section>
 
-      <footer className="relative max-w-6xl mx-auto px-6 py-8 border-t border-slate-800 text-center text-xs text-slate-600">
-        ComHub · Plateforme Multi-Organisations
+      {/* ================= FOOTER ================= */}
+      <footer className="bg-white border-t border-slate-100 py-12">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white">
+              <Layers className="w-4 h-4 text-orange-500" />
+            </div>
+            <span className="font-bold text-slate-900">ComHub</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-8 text-sm text-slate-500 font-medium">
+            <a href="#" className="hover:text-slate-900 transition-colors">Contact</a>
+            <a href="#" className="hover:text-slate-900 transition-colors">Aide</a>
+            <a href="#" className="hover:text-slate-900 transition-colors">Conditions</a>
+            <a href="#" className="hover:text-slate-900 transition-colors">Mentions Légales</a>
+          </div>
+
+          <p className="text-xs text-slate-400">
+            © {new Date().getFullYear()} ComHub. Tous droits réservés.
+          </p>
+        </div>
       </footer>
+
     </div>
   )
 }
