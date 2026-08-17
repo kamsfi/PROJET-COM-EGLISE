@@ -66,6 +66,29 @@
   --gold-dark: 180 83 9;
 }
 
+/* Pour toute page qui n'est PAS censée suivre le thème clair/sombre de
+   l'app (ex: une landing page collée telle quelle, écrite avec le sens
+   standard de Tailwind où slate-900 = texte foncé, slate-50 = fond
+   clair) — fige l'échelle "slate" sur ses vraies valeurs Tailwind,
+   quel que soit le thème actif. À poser sur le conteneur racine de
+   cette page (ex: <div className="standard-slate ...">). Sans ça,
+   `text-slate-900` hérite du sens INVERSÉ utilisé par le reste de
+   l'app pour son propre mode clair, et le texte devient illisible.
+   Coupables déjà observés : landing page. */
+.standard-slate {
+  --slate-50: 248 250 252;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+  --slate-700: 51 65 85;
+  --slate-800: 30 41 59;
+  --slate-900: 15 23 42;
+  --slate-950: 2 6 23;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
