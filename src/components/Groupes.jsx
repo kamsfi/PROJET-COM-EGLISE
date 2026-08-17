@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { UsersRound, Sparkles, Plus } from 'lucide-react'
-import { groups as groupsData, getInitials, pickColor, isRealWorkspaceId } from '../data'
+import { groups as groupsData, getInitials, pickColor, isRealWorkspaceId, matchGroupRules, computeAge } from '../data'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useOrganizations } from '../context/OrganizationsContext'
 import { useCurrentUser } from '../context/CurrentUserContext'
@@ -143,7 +143,7 @@ export default function Groupes() {
     async function loadGroups() {
       const [{ data: groupRows, error: groupsErr }, { data: memberRows, error: membersErr }] = await Promise.all([
         supabase.from('groups')
-          .select('id, name, description, photo_url, targeting_type, targeting_criteria, group_members(user_id, profiles(id, full_name, avatar_url, profession, skills))')
+          .select('id, name, description, photo_url, created_by, targeting_type, targeting_criteria, group_members(user_id, profiles(id, full_name, avatar_url, profession, skills))')
           .eq('organization_id', activeWorkspace.id),
         supabase.from('memberships')
           .select('user_id, role')
@@ -162,6 +162,7 @@ export default function Groupes() {
           name: row.name,
           description: row.description || '',
           photoUrl: row.photo_url || null,
+          createdBy: row.created_by || null,
           memberCount: gm.length,
           memberIds: gm.map(x => x.user_id),
           rules: mapCriteriaToRules(row.targeting_type, row.targeting_criteria),
@@ -216,6 +217,28 @@ export default function Groupes() {
 
   const canManage = activeWorkspace.role === 'admin' || activeWorkspace.role === 'leader'
 
+  // Filtre de visibilité côté frontend — miroir exact de la policy RLS SQL
+  // `groups_select` (20260821_group_privacy) : un membre ne voit que les
+  // groupes qu'il a créés, dont il est déjà membre, ou dont il correspond
+  // aux critères. Pas d'exception pour "admin/leader" en général — seul le
+  // créateur d'un groupe précis y échappe (décision explicite : "même règle
+  // pour tout le monde, y compris les admins").
+  const visibleGroups = useMemo(() => {
+    const age = computeAge(currentUser.birth_date)
+    const profile = { gender: currentUser.gender, age, maritalStatus: currentUser.marital_status }
+    return localGroups.filter(g => {
+      // Créateur du groupe
+      if (g.createdBy && g.createdBy === currentUser.id) return true
+      // Déjà membre du groupe
+      if (g.memberIds?.includes(currentUser.id)) return true
+      // Groupe ouvert (aucune règle)
+      if (!g.rules) return true
+      // Correspond aux critères du groupe
+      if (matchGroupRules(g.rules, profile)) return true
+      return false
+    })
+  }, [localGroups, currentUser])
+
   const handleCreate = async ({ name, description, rules }) => {
     if (isSupabaseConfigured && isRealWorkspaceId(activeWorkspace.id)) {
       setCreateError('')
@@ -232,7 +255,7 @@ export default function Groupes() {
         return
       }
       setLocalGroups(prev => [
-        { id: data.id, workspaceId: activeWorkspace.id, name: data.name, description: data.description || '', memberCount: 0, memberIds: [], rules: mapCriteriaToRules(data.targeting_type, data.targeting_criteria) },
+        { id: data.id, workspaceId: activeWorkspace.id, name: data.name, description: data.description || '', createdBy: currentUser.id, memberCount: 0, memberIds: [], rules: mapCriteriaToRules(data.targeting_type, data.targeting_criteria) },
         ...prev,
       ])
       setShowModal(false)
@@ -276,7 +299,7 @@ export default function Groupes() {
 
   const selectedGroup = localGroups.find(g => g.id === selectedGroupId)
   const editingGroup = localGroups.find(g => g.id === editingGroupId)
-  const selectedIndex = localGroups.findIndex(g => g.id === selectedGroupId)
+  const selectedIndex = visibleGroups.findIndex(g => g.id === selectedGroupId)
   const selectedMembers = selectedGroup
     ? (selectedGroup.memberIds || []).map(id => members.find(m => m.id === id)).filter(Boolean)
     : []
@@ -343,7 +366,7 @@ export default function Groupes() {
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {localGroups.map((group, i) => (
+          {visibleGroups.map((group, i) => (
             <GroupCard
               key={group.id}
               group={group}
@@ -353,8 +376,8 @@ export default function Groupes() {
             />
           ))}
         </div>
-        {localGroups.length === 0 && (
-          <div className="text-center text-slate-500 py-12 text-sm">Aucun groupe pour cet espace</div>
+        {visibleGroups.length === 0 && (
+          <div className="text-center text-slate-500 py-12 text-sm">Aucun groupe correspondant à votre profil</div>
         )}
       </div>
 
