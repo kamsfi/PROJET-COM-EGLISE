@@ -7,3 +7,4 @@ dist/
 .DS_Store
 .claude/
 _archive/
+vite.config.js.timestamp-*.mjs
