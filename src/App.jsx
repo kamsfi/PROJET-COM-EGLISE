@@ -13,6 +13,7 @@ import RoleBadge from './components/RoleBadge'
 import AuthModal from './components/AuthModal'
 import LandingPage from './components/LandingPage'
 import NoWorkspaceScreen from './components/NoWorkspaceScreen'
+import ResetPasswordScreen from './components/ResetPasswordScreen'
 import WorkspaceSwitcher from './components/WorkspaceSwitcher'
 import Avatar from './components/Avatar'
 import AdminAssistant from './components/AdminAssistant'
@@ -37,7 +38,7 @@ const TABS = [
 const UNREAD_TAB_IDS = { discussions: 'hasUnreadDiscussions', groupes: 'hasUnreadGroups' }
 
 function AppShell() {
-  const { currentUser, isAuthenticated, sessionLoading, logout } = useCurrentUser()
+  const { currentUser, isAuthenticated, sessionLoading, passwordRecovery, logout } = useCurrentUser()
   const { activeWorkspace } = useWorkspace()
   const notifications = useNotifications()
   const [activeTab, setActiveTab] = useState('discussions')
@@ -51,6 +52,13 @@ function AppShell() {
         <Layers className="w-8 h-8 text-gold animate-pulse" />
       </div>
     )
+  }
+
+  // Un clic sur le lien "mot de passe oublié" crée une session réelle
+  // (donc isAuthenticated deviendrait vrai) — on l'intercepte avant tout
+  // le reste pour forcer le choix d'un nouveau mot de passe.
+  if (passwordRecovery) {
+    return <ResetPasswordScreen />
   }
 
   if (!isAuthenticated) {

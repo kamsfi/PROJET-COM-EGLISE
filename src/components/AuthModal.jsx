@@ -39,10 +39,29 @@ async function completePendingOrgCreation(userId) {
 function ResetPasswordPanel({ onBack }) {
   const [identifier, setIdentifier] = useState('')
   const [sent, setSent] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!identifier.trim()) return
+    if (!identifier.trim() || submitting) return
+
+    if (!isSupabaseConfigured) {
+      // Mode démo : aucun vrai compte à réinitialiser.
+      setSent(true)
+      return
+    }
+
+    setError('')
+    setSubmitting(true)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(identifier.trim(), {
+      redirectTo: window.location.origin,
+    })
+    setSubmitting(false)
+    if (resetError) {
+      setError(`Supabase : ${resetError.message}`)
+      return
+    }
     setSent(true)
   }
 
@@ -84,11 +103,13 @@ function ResetPasswordPanel({ onBack }) {
               className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all"
             />
           </div>
+          {error && <p className="text-xs text-red-400 px-1">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-gold hover:bg-gold-light text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
+            disabled={submitting}
+            className="w-full bg-gold hover:bg-gold-light disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
           >
-            Envoyer le lien
+            {submitting ? 'Envoi…' : 'Envoyer le lien'}
           </button>
         </form>
       )}

@@ -62,6 +62,11 @@ export function CurrentUserProvider({ children }) {
   // `public.memberships`, tenu à jour via `onAuthStateChange`.
   const [sessionProfile, setSessionProfile] = useState(null)
   const [sessionLoading, setSessionLoading] = useState(isSupabaseConfigured)
+  // Devient vrai quand la session vient d'un lien de réinitialisation de mot
+  // de passe (voir ResetPasswordPanel) — bloque l'accès à l'app tant qu'un
+  // nouveau mot de passe n'a pas été choisi (voir updatePassword ci-dessous
+  // et le garde-fou dans App.jsx).
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
     if (!isSupabaseConfigured) return
@@ -80,7 +85,8 @@ export function CurrentUserProvider({ children }) {
       setSessionLoading(false)
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       applySession(session)
     })
 
@@ -138,6 +144,14 @@ export function CurrentUserProvider({ children }) {
     setSessionProfile(prev => (prev ? { ...prev, memberships: [...prev.memberships, { workspaceId, role }] } : prev))
   }, [])
 
+  // Définit le nouveau mot de passe après un clic sur le lien reçu par email
+  // (ResetPasswordPanel). Lève le blocage `passwordRecovery` en cas de succès.
+  const updatePassword = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (!error) setPasswordRecovery(false)
+    return { error }
+  }, [])
+
   const value = {
     demoUsers: users,
     currentUserId,
@@ -145,12 +159,14 @@ export function CurrentUserProvider({ children }) {
     currentUser,
     isAuthenticated,
     sessionLoading,
+    passwordRecovery,
     login,
     logout,
     findUserByIdentifier,
     registerUser,
     updateCurrentUser,
     addMembership,
+    updatePassword,
   }
 
   return (
