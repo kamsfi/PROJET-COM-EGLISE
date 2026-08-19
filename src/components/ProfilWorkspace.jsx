@@ -180,7 +180,7 @@ export default function ProfilWorkspace() {
         {/* Informations personnelles */}
         <div className="bg-night-800 rounded-2xl border border-slate-800 p-5 animate-slide-up">
           <h3 className="font-semibold text-slate-100 mb-1">Informations personnelles</h3>
-          <p className="text-xs text-slate-400 mb-2">Synchronisées avec votre profil ComHub</p>
+          <p className="text-xs text-slate-400 mb-2">Synchronisées avec votre profil Cordée</p>
 
           <InfoRow icon={Phone} label="Téléphone" value={currentUser.phone} />
           <InfoRow icon={VenetianMask} label="Genre" value={genderLabels[currentUser.gender]} />
@@ -323,7 +323,7 @@ export default function ProfilWorkspace() {
         </div>
 
         <div className="text-center text-xs text-slate-600 py-2">
-          Pour vos dons et cotisations, direction l'onglet Finances · ComHub 2.1
+          Pour vos dons et cotisations, direction l'onglet Finances · Cordée 2.1
         </div>
       </div>
 

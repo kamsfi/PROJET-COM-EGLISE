@@ -40,7 +40,7 @@ function MemberCard({ member, orgLabel, onOpen }) {
 
       <div className="flex items-center gap-1.5 text-xs text-gold-light pt-2 border-t border-slate-800/50">
         <Phone className="w-3.5 h-3.5 shrink-0" />
-        Appeler depuis ComHub
+        Appeler depuis Cordée
       </div>
     </button>
   )

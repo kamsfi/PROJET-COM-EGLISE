@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
-        name: 'ComHub — Plateforme Multi-Organisations',
-        short_name: 'ComHub',
+        name: 'Cordée — Plateforme Multi-Organisations',
+        short_name: 'Cordée',
         description: 'Messagerie, groupes, événements et finances pour les églises, entreprises et ONG.',
         lang: 'fr',
         theme_color: '#D97706',

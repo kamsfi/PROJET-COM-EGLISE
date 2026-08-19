@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Mail, Lock, Layers, Eye, EyeOff, Sparkles, ChevronLeft, Check, X } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Sparkles, ChevronLeft, Check, X } from 'lucide-react'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import SignupWizard, { PENDING_JOIN_STORAGE_KEY, PENDING_CREATE_ORG_STORAGE_KEY, createRealOrganization } from './SignupWizard'
+import CordeeMark from './CordeeMark'
 
 // Finalise une adhésion à une organisation Supabase mise en attente lors de
 // l'inscription (cas où la confirmation e-mail/SMS était requise et où la
@@ -174,10 +175,10 @@ function LoginPanel({ onSwitchToSignup }) {
     <div>
       <div className="flex flex-col items-center text-center mb-6">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center mb-3">
-          <Layers className="w-6 h-6 text-white" />
+          <CordeeMark className="w-6 h-6 text-white" />
         </div>
         <h2 className="text-xl font-bold text-slate-100">Bon retour parmi vous</h2>
-        <p className="text-sm text-slate-400 mt-1">Connectez-vous à ComHub</p>
+        <p className="text-sm text-slate-400 mt-1">Connectez-vous à Cordée</p>
         <p className="text-[10px] text-slate-600 mt-1">
           {isSupabaseConfigured ? 'Connecté à Supabase' : 'Mode démo local · Supabase non configuré'}
         </p>
@@ -294,9 +295,9 @@ export default function AuthModal({ initialMode = 'login', onClose }) {
       <div className="flex items-center justify-between px-5 py-4 max-w-lg mx-auto">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
-            <Layers className="w-4 h-4 text-white" />
+            <CordeeMark className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-slate-100">ComHub</span>
+          <span className="font-bold text-slate-100">Cordée</span>
         </div>
         {onClose && (
           <button

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Layers, Hash, LogOut } from 'lucide-react'
+import { Hash, LogOut } from 'lucide-react'
 import { useCurrentUser } from '../context/CurrentUserContext'
 import { supabase } from '../lib/supabaseClient'
+import CordeeMark from './CordeeMark'
 
 export default function NoWorkspaceScreen() {
   const { currentUser, logout } = useCurrentUser()
@@ -33,7 +34,7 @@ export default function NoWorkspaceScreen() {
       <div className="w-full max-w-sm bg-night-800 border border-slate-800 rounded-3xl p-6 shadow-2xl">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center mb-3">
-            <Layers className="w-6 h-6 text-white" />
+            <CordeeMark className="w-6 h-6 text-white" />
           </div>
           <h2 className="text-xl font-bold text-slate-100">Bienvenue, {currentUser.full_name.split(' ')[0]}</h2>
           <p className="text-sm text-slate-400 mt-1">

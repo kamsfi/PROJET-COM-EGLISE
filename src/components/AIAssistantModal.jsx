@@ -29,7 +29,7 @@ function LoadingState({ subject }) {
           <Loader2 className="w-7 h-7 text-white animate-spin" />
         </div>
       </div>
-      <h3 className="font-semibold text-slate-100 mb-1">ComHub AI analyse « {subject} »</h3>
+      <h3 className="font-semibold text-slate-100 mb-1">Cordée AI analyse « {subject} »</h3>
       <p className="text-sm text-gold-light transition-all">{LOADING_STEPS[step]}</p>
     </div>
   )
@@ -68,7 +68,7 @@ function ReadyState({ summary, onClose }) {
       <div className="px-5 pt-1 pb-4">
         <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
           <Sparkles className="w-3.5 h-3.5 text-gold" />
-          <span>Généré par ComHub AI · {summary.generatedAt}</span>
+          <span>Généré par Cordée AI · {summary.generatedAt}</span>
         </div>
         <h3 className="text-lg font-bold text-slate-100 leading-snug">{summary.subject}</h3>
       </div>
@@ -137,7 +137,7 @@ export default function AIAssistantModal({ subject, kind, onClose }) {
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-slate-100">ComHub AI</span>
+            <span className="font-semibold text-slate-100">Cordée AI</span>
           </div>
           <button
             onClick={onClose}

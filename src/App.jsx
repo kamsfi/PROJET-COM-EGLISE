@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { MessageCircle, Radio, Heart, User, Users, Layers, Calendar, Library, LogOut, UsersRound, Wallet } from 'lucide-react'
+import { MessageCircle, Radio, Heart, User, Users, Calendar, Library, LogOut, UsersRound, Wallet } from 'lucide-react'
+import CordeeMark from './components/CordeeMark'
 import Discussions from './components/Discussions'
 import Canaux from './components/Canaux'
 import Evenements from './components/Evenements'
@@ -49,7 +50,7 @@ function AppShell() {
   if (sessionLoading) {
     return (
       <div className="h-screen w-screen bg-night-900 flex items-center justify-center">
-        <Layers className="w-8 h-8 text-gold animate-pulse" />
+        <CordeeMark className="w-8 h-8 text-gold animate-pulse" />
       </div>
     )
   }
@@ -91,10 +92,10 @@ function AppShell() {
         <div className="px-5 py-5 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
-              <Layers className="w-5 h-5 text-white" />
+              <CordeeMark className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-100 leading-tight">ComHub</h1>
+              <h1 className="font-bold text-slate-100 leading-tight">Cordée</h1>
               <p className="text-xs text-slate-500">Plateforme Multi-Organisations</p>
             </div>
           </div>
@@ -156,9 +157,9 @@ function AppShell() {
         <header className="lg:hidden flex items-center justify-between gap-2 px-4 py-3 bg-night-800 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
-              <Layers className="w-4 h-4 text-white" />
+              <CordeeMark className="w-4 h-4 text-white" />
             </div>
-            <h1 className="font-bold text-slate-100 shrink-0">ComHub</h1>
+            <h1 className="font-bold text-slate-100 shrink-0">Cordée</h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <WorkspaceSwitcher variant="mobile" />

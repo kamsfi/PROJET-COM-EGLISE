@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import {
-  Layers, MessageCircle, Radio, Calendar, Library, Users, UsersRound, Wallet, Heart,
+  MessageCircle, Radio, Calendar, Library, Users, UsersRound, Wallet, Heart,
   ArrowRight, Sparkles, ShieldCheck, Zap, Church, Building2, HeartHandshake,
   ChevronRight, Plus, Search,
 } from 'lucide-react'
+import CordeeMark from './CordeeMark'
 
 const FEATURES = [
   { icon: MessageCircle, label: 'Discussions', text: 'Messagerie privée en temps réel, pièces jointes incluses.' },
@@ -133,10 +134,10 @@ export default function LandingPage({ onLogin, onSignup }) {
       <nav className="relative max-w-6xl mx-auto px-6 py-5 flex items-center justify-between border-b border-slate-800">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shrink-0">
-            <Layers className="w-4.5 h-4.5 text-white" />
+            <CordeeMark className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-slate-100 leading-tight">ComHub</p>
+            <p className="font-bold text-slate-100 leading-tight">Cordée</p>
             <p className="text-[11px] text-slate-500 leading-tight">Plateforme Multi-Organisations</p>
           </div>
         </div>
@@ -169,7 +170,7 @@ export default function LandingPage({ onLogin, onSignup }) {
             </h1>
 
             <p className="text-base sm:text-lg text-slate-400 leading-relaxed max-w-xl mx-auto lg:mx-0">
-              ComHub centralise messagerie, groupes, événements, médiathèque et finances pour les églises, entreprises et ONG — chaque organisation dans son propre espace, entièrement cloisonné.
+              Cordée centralise messagerie, groupes, événements, médiathèque et finances pour les églises, entreprises et ONG — chaque organisation dans son propre espace, entièrement cloisonné.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-1 justify-center lg:justify-start">
@@ -247,7 +248,7 @@ export default function LandingPage({ onLogin, onSignup }) {
       </main>
 
       <footer className="relative max-w-6xl mx-auto px-6 py-8 border-t border-slate-800 text-center text-xs text-slate-600">
-        ComHub · Plateforme Multi-Organisations
+        Cordée · Plateforme Multi-Organisations
       </footer>
     </div>
   )

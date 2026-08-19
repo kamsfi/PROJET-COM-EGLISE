@@ -399,7 +399,7 @@ export default function SignupWizard({ onBackToLogin }) {
             </div>
             <p className="text-[11px] text-slate-500 px-1 flex items-start gap-1.5">
               <VenetianMask className="w-3 h-3 mt-0.5 shrink-0" />
-              Le sexe et l'âge permettent l'affectation automatique aux groupes (ex: Ministère des Hommes, Groupe Jeunesse) et les rappels d'anniversaire par ComHub AI.
+              Le sexe et l'âge permettent l'affectation automatique aux groupes (ex: Ministère des Hommes, Groupe Jeunesse) et les rappels d'anniversaire par Cordée AI.
             </p>
           </div>
 
@@ -497,7 +497,7 @@ export default function SignupWizard({ onBackToLogin }) {
         <form onSubmit={handleFinalSubmit}>
           <StepHeader
             step={3} totalSteps={3}
-            title="Rejoindre une organisation" subtitle="Dernière étape avant votre arrivée sur ComHub"
+            title="Rejoindre une organisation" subtitle="Dernière étape avant votre arrivée sur Cordée"
             onBack={() => setStep(2)}
           />
 
@@ -592,7 +592,7 @@ export default function SignupWizard({ onBackToLogin }) {
               <PartyPopper className="w-7 h-7 text-emerald-400" />
             </div>
             <h2 className="text-lg font-bold text-slate-100">Bienvenue, {result.newUser.full_name.split(' ')[0]} !</h2>
-            <p className="text-xs text-slate-400 mt-1">Votre compte ComHub a été créé et affecté automatiquement.</p>
+            <p className="text-xs text-slate-400 mt-1">Votre compte Cordée a été créé et affecté automatiquement.</p>
           </div>
 
           {supabaseNotice && (
@@ -642,7 +642,7 @@ export default function SignupWizard({ onBackToLogin }) {
                 <CakeSlice className="w-4 h-4 text-gold" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-200">Rappels ComHub AI activés</p>
+                <p className="text-sm text-slate-200">Rappels Cordée AI activés</p>
                 <p className="text-[11px] text-slate-500">Date de naissance enregistrée pour le rappel d'anniversaire</p>
               </div>
             </div>
@@ -653,7 +653,7 @@ export default function SignupWizard({ onBackToLogin }) {
             className="w-full bg-gold hover:bg-gold-light text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] mt-5 flex items-center justify-center gap-2"
           >
             <Check className="w-4 h-4" />
-            Accéder à ComHub
+            Accéder à Cordée
           </button>
         </div>
       )}
