@@ -153,13 +153,15 @@ export default function SignupWizard({ onBackToLogin }) {
     let supabaseOrgId = null // renseigné uniquement si l'organisation rejointe existe réellement dans Supabase
 
     if (joinMode === 'join') {
-      org = findOrgByJoinCode(joinCode)
-      if (org) {
-        role = 'member'
-      } else if (isSupabaseConfigured) {
-        // Le code ne correspond à aucune organisation de démonstration locale :
-        // on tente une résolution côté Supabase via la RPC dédiée (contourne
-        // la RLS "membres uniquement" le temps de vérifier le code).
+      if (isSupabaseConfigured) {
+        // En production, on ne consulte JAMAIS le catalogue mock local (qui
+        // contient des codes de démonstration fixes comme EGL-4F82) : un vrai
+        // code doit toujours être résolu côté Supabase via la RPC dédiée
+        // (contourne la RLS "membres uniquement" le temps de vérifier le
+        // code). Résoudre d'abord en local exposait un bug réel : si un
+        // utilisateur tapait un code de démo, il était rattaché à une
+        // organisation fictive (id non-UUID) sans qu'aucune ligne
+        // `memberships` ne soit jamais créée dans Supabase.
         const { data: matches, error: lookupError } = await supabase
           .rpc('find_organization_by_code', { p_code: joinCode.trim() })
         const dbOrg = matches?.[0]
@@ -178,8 +180,12 @@ export default function SignupWizard({ onBackToLogin }) {
         }
         role = 'member'
       } else {
-        setError('Code d\'organisation introuvable. Vérifiez le code auprès de votre organisation.')
-        return
+        org = findOrgByJoinCode(joinCode)
+        if (!org) {
+          setError('Code d\'organisation introuvable. Vérifiez le code auprès de votre organisation.')
+          return
+        }
+        role = 'member'
       }
     } else {
       if (!orgName.trim() || !orgType) {
@@ -526,11 +532,15 @@ export default function SignupWizard({ onBackToLogin }) {
                 <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="text" value={joinCode} onChange={e => setJoinCode(e.target.value)}
-                  placeholder="Code d'organisation / d'invitation (ex: EGL-4F82)"
+                  placeholder="Code d'organisation / d'invitation (ex: EGL-1234)"
                   className="w-full bg-night-700 text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gold/50 transition-all uppercase placeholder:normal-case"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 px-1">Codes de démonstration : EGL-4F82 (Église), ENT-7731 (Entreprise), ONG-5290 (ONG).</p>
+              {isSupabaseConfigured ? (
+                <p className="text-[11px] text-slate-500 px-1">Demandez ce code à l'administrateur de votre organisation.</p>
+              ) : (
+                <p className="text-[11px] text-slate-500 px-1">Codes de démonstration : EGL-4F82 (Église), ENT-7731 (Entreprise), ONG-5290 (ONG).</p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

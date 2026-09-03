@@ -8,3 +8,5 @@ dist/
 .claude/
 _archive/
 vite.config.js.timestamp-*.mjs
+supabase/.temp/
+supabase/.branches/
